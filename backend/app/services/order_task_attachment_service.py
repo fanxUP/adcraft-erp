@@ -7,6 +7,8 @@ delete an order-stage attachment and is never used as the attachment owner.
 
 from __future__ import annotations
 
+from app.core.file_security import read_upload
+
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -429,9 +431,9 @@ class OrderTaskAttachmentService:
     async def _validate_file(self, task_type: str, file) -> tuple[bytes, str | None, str | None]:
         # Reuse the established magic-byte and extension policy so the order
         # entry and task-entry adapters cannot drift apart.
-        from app.api.tasks import validate_installation_media, validate_task_attachment
+        from app.api.tasks import validate_installation_media, validate_task_attachment, TASK_ATTACHMENT_FILE_MAX_BYTES
 
-        contents = await file.read()
+        contents = await read_upload(file, max_bytes=TASK_ATTACHMENT_FILE_MAX_BYTES)
 
         if task_type == "installation":
             message, safe_extension, category = validate_installation_media(

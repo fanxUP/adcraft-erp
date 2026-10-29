@@ -2,6 +2,7 @@
 import importlib
 import os
 import pkgutil
+from datetime import datetime
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -65,7 +66,11 @@ async def test_shared_supplier_and_historical_tasks_survive_capability_removal_a
             edited = await outsource.update_task(task_id, {"remark": "历史任务继续履约"})
             assert edited["vendor_id"] == shared["id"]
             await svc.deactivate_supplier(supplier_id)
-            payment = await outsource.create_payment(dict(vendor_id=shared["id"], task_id=task["id"], amount=40))
+            from app.models.company_account import CompanyAccount
+            account = CompanyAccount(name="生命周期测试现金账户", account_type="cash", is_active=True)
+            db.add(account)
+            await db.flush()
+            payment = await outsource.create_payment(dict(vendor_id=shared["id"], task_id=task["id"], amount=40, paid_at="2026-10-29T12:00:00", payment_account_id=account.id))
             assert payment["amount"] == 40
             summary = await outsource.get_task_payment_summary(task_id)
             assert summary["unpaid_amount"] == 60

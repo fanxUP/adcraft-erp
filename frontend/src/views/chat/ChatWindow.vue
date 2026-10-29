@@ -264,10 +264,6 @@
               <el-icon><ShoppingCart /></el-icon>
               <span>订单</span>
             </div>
-            <div class="share-card-item" @click="showShareDialog('quote')">
-              <el-icon><Tickets /></el-icon>
-              <span>报价单</span>
-            </div>
             <div class="share-card-item" @click="showShareDialog('task')">
               <el-icon><List /></el-icon>
               <span>任务</span>
@@ -507,7 +503,6 @@
         <div class="batch-type-tabs">
           <el-radio-group v-model="batchShareType" size="small" @change="loadBatchItems">
             <el-radio-button value="order">订单</el-radio-button>
-            <el-radio-button value="quote">报价单</el-radio-button>
             <el-radio-button value="task">任务</el-radio-button>
             <el-radio-button value="customer">客户</el-radio-button>
           </el-radio-group>

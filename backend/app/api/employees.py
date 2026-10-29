@@ -84,6 +84,8 @@ async def upload_employee_image(file: UploadFile = File(...), db=Depends(get_db)
     fp = f"{dest_dir}/{fn}"
     with open(fp, "wb") as f:
         f.write(content)
+    from app.services.file_access_service import register_upload
+    await register_upload(db, fp, current_user, "employee:private")
     return success({"file_url": f"/uploads/{date_dir}/{fn}", "file_name": file.filename or fn, "file_size": len(content)})
 
 @router.get("/{employee_id}/handover")
@@ -127,6 +129,8 @@ async def upload_attachment(employee_id: str, file: UploadFile = File(...), cate
     c = await file.read(20 * 1024 * 1024 + 1)
     if len(c) > 20 * 1024 * 1024:
         raise HTTPException(400, "附件不能超过20MB")
+    from app.core.file_security import validate_attachment_content
+    validate_attachment_content(file.filename, c)
     with open(fp,"wb") as f: f.write(c)
     att = await AttachmentService(db).add_attachment("employee", UUID(employee_id),
         {"filename": file.filename or fn, "file_path": f"{date_dir}/{fn}", "file_size": len(c), "file_type": file.content_type, "category": category, "remark": remark}, uploaded_by=current_user.id)

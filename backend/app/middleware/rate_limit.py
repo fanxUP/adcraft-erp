@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from jose import JWTError, jwt
+from app.utils.security import decode_access_token
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.core.config import settings
@@ -106,12 +106,7 @@ def _resolve_client_id(request: Request, limiter: RateLimiter) -> str:
 def _decode_user_id(token: str) -> str | None:
     """Decode user UUID from JWT without hitting the database."""
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=["HS256"],
-            options={"verify_exp": True},
-        )
+        payload = decode_access_token(token)
         return payload.get("sub")
-    except JWTError:
+    except ValueError:
         return None

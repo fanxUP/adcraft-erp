@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ from app.core.permissions import (
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
+    PERM_ORDER_READ,
     user_has_permission,
 )
 from app.core.database import get_db
@@ -48,10 +50,16 @@ from app.services.chat_service import (
     broadcast_to_conversation,
 )
 from app.repositories.conversation_repo import MessageRepo
+from app.services.order_task_assignment_service import task_visibility_clause, get_visible_task
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+_TASK_READ_PERMISSION = {
+    "DesignTask": "design_task:read",
+    "ProductionTask": "production_task:read",
+    "InstallationTask": "installation_task:read",
+}
 
 
 # Chat messages are intentionally stored as user-facing JSON and may contain
@@ -137,6 +145,43 @@ def _serialize_chat_message(message: MessageResponse, viewer: User | None) -> di
     return data
 
 
+async def _require_member(db, conversation_id, user):
+    if not await ChatService(db).member_repo.is_member(conversation_id, user.id):
+        raise HTTPException(403, "不是会话成员")
+
+
+def _can_lookup(kind, viewer):
+    if kind == "quote":
+        return False
+    permission = {"order": PERM_ORDER_READ, "customer": PERM_CUSTOMER_READ}.get(kind)
+    if permission:
+        return viewer is None or user_has_permission(viewer, permission)
+    return kind == "task"
+
+
+async def _visible_chat_message(db, message, viewer):
+    data = _serialize_chat_message(message, viewer)
+    if message.type not in {"card", "batch_card"}:
+        return data
+    extra = data.get("extra_data") or {}
+    async def resolve(card):
+        try:
+            kind, object_id = card.get("card_type"), uuid.UUID(str(card.get("card_id")))
+        except (ValueError, TypeError, AttributeError):
+            return None
+        fresh = await _get_card_data(db, kind, object_id, viewer=viewer)
+        return {"card_type": kind, "card_id": str(object_id), **fresh} if fresh else None
+    if "cards" in extra:
+        cards = [result for card in extra["cards"] if (result := await resolve(card))]
+        data["extra_data"] = {"card_type": "batch", "cards": cards, "count": len(cards)}
+        data["content"] = "业务卡片" if cards else "业务资料已停用或无权查看"
+    else:
+        fresh = await resolve(extra)
+        data["extra_data"] = fresh or {}
+        data["content"] = fresh["title"] if fresh else "业务资料已停用或无权查看"
+    return data
+
+
 @router.get("/private/{user_id}")
 async def get_or_create_private_conversation(
     user_id: uuid.UUID,
@@ -191,6 +236,10 @@ async def search_business_objects(
     from app.models.task import DesignTask, ProductionTask, InstallationTask
     from app.models.customer import Customer
 
+    if type not in {"order", "quote", "task", "customer"}:
+        raise HTTPException(400, "不支持的业务对象类型")
+    if not _can_lookup(type, current_user):
+        return success([])
     results = []
     limit = 20
 
@@ -221,32 +270,6 @@ async def search_business_objects(
             for o in rows
         ]
 
-    elif type == "quote":
-        query = select(BusinessDocument).where(
-            BusinessDocument.doc_type == "quote",
-            BusinessDocument.deleted_at.is_(None),
-        )
-        if keyword:
-            query = query.where(
-                or_(
-                    BusinessDocument.doc_no.ilike(f"%{keyword}%"),
-                    BusinessDocument.customer_name.ilike(f"%{keyword}%"),
-                )
-            )
-        query = query.order_by(BusinessDocument.created_at.desc()).limit(limit)
-        rows = (await db.execute(query)).scalars().all()
-        results = [
-            {
-                "id": str(q.id),
-                "title": f"报价单 #{q.doc_no}",
-                "subtitle": f"客户: {q.customer_name or '-'}",
-                "status": q.status,
-                **({"amount": float(q.total_amount) if q.total_amount else None}
-                   if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
-            }
-            for q in rows
-        ]
-
     elif type == "task":
         task_configs = [
             (DesignTask, "design_no", "设计"),
@@ -254,8 +277,10 @@ async def search_business_objects(
             (InstallationTask, "installation_no", "安装"),
         ]
         for TaskModel, no_field, label in task_configs:
+            if not user_has_permission(current_user, _TASK_READ_PERMISSION[TaskModel.__name__]):
+                continue
             no_col = getattr(TaskModel, no_field)
-            query = select(TaskModel)
+            query = select(TaskModel).where(task_visibility_clause(TaskModel, current_user))
             if keyword:
                 conditions = [no_col.ilike(f"%{keyword}%")]
                 if hasattr(TaskModel, "project_name"):
@@ -320,7 +345,7 @@ async def search_messages(
         current_user.id, keyword, conversation_id, page, page_size
     )
     return success({
-        "items": [_serialize_chat_message(m, current_user) for m in messages],
+        "items": [await _visible_chat_message(db, m, current_user) for m in messages],
         "total": total,
         "has_more": len(messages) == page_size,
     })
@@ -336,7 +361,15 @@ async def get_recent_shared_cards(
     """获取用户最近分享的业务卡片"""
     message_repo = MessageRepo(db)
     cards = await message_repo.get_recent_shared_cards(current_user.id, card_type=type, limit=limit)
-    return success([_redact_chat_payload(card, current_user) for card in cards])
+    visible = []
+    for card in cards:
+        try:
+            fresh = await _get_card_data(db, card.get("card_type"), uuid.UUID(str(card.get("card_id"))), viewer=current_user)
+        except (ValueError, TypeError):
+            fresh = None
+        if fresh:
+            visible.append({"card_type": card["card_type"], "card_id": card["card_id"], **fresh})
+    return success(visible)
 
 
 @router.get("/my-recent-objects")
@@ -352,6 +385,10 @@ async def get_my_recent_objects(
     from app.models.customer import Customer, CustomerContact
     from sqlalchemy.orm import joinedload
 
+    if type not in {"order", "quote", "task", "customer"}:
+        raise HTTPException(400, "不支持的业务对象类型")
+    if not _can_lookup(type, current_user):
+        return success([])
     results = []
 
     if type == "order":
@@ -372,23 +409,6 @@ async def get_my_recent_objects(
             for o in rows
         ]
 
-    elif type == "quote":
-        query = (
-            select(BusinessDocument)
-            .where(
-                BusinessDocument.doc_type == "quote",
-                BusinessDocument.deleted_at.is_(None),
-                BusinessDocument.sales_user_id == current_user.id,
-            )
-            .order_by(BusinessDocument.created_at.desc())
-            .limit(limit)
-        )
-        rows = (await db.execute(query)).scalars().all()
-        results = [
-            {"id": str(q.id), "title": f"报价单 #{q.doc_no}", "subtitle": f"客户: {q.customer_name or '-'}", "status": q.status}
-            for q in rows
-        ]
-
     elif type == "task":
         task_configs = [
             (DesignTask, "design_no", "设计"),
@@ -396,10 +416,12 @@ async def get_my_recent_objects(
             (InstallationTask, "installation_no", "安装"),
         ]
         for TaskModel, no_field, label in task_configs:
+            if not user_has_permission(current_user, _TASK_READ_PERMISSION[TaskModel.__name__]):
+                continue
             no_col = getattr(TaskModel, no_field)
             query = (
                 select(TaskModel)
-                .where(TaskModel.assigned_to == current_user.id)
+                .where(TaskModel.assigned_to == current_user.id, task_visibility_clause(TaskModel, current_user))
                 .order_by(TaskModel.created_at.desc())
                 .limit(limit)
             )
@@ -593,7 +615,7 @@ async def get_messages(
         )
         result_data = result.model_dump(mode="json")
         result_data["items"] = [
-            _serialize_chat_message(message, current_user)
+            await _visible_chat_message(db, message, current_user)
             for message in result.items
         ]
         return success(result_data)
@@ -618,7 +640,7 @@ async def send_message(
         # 通过 WebSocket 推送新消息给其他成员
         await broadcast_new_message(conversation_id, message, current_user.id)
 
-        return success(_serialize_chat_message(message, current_user))
+        return success(await _visible_chat_message(db, message, current_user))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
@@ -669,6 +691,8 @@ async def get_recommendations(
     from app.models.customer import Customer
     from sqlalchemy.orm import joinedload
     from collections import Counter
+
+    await _require_member(db, conversation_id, current_user)
 
     # 获取最近消息
     msg_repo = MessageRepo(db)
@@ -738,7 +762,7 @@ async def get_recommendations(
 
     # 搜索订单
     try:
-        for kw in top_keywords:
+        for kw in (top_keywords if _can_lookup("order", current_user) else []):
             query = (
                 select(BusinessDocument)
                 .options(joinedload(BusinessDocument.customer))
@@ -765,40 +789,6 @@ async def get_recommendations(
                         "subtitle": f"客户: {o.customer.name if o.customer else '-'}",
                         "status": o.status,
                         **({"amount": float(o.total_amount) if o.total_amount else None}
-                           if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
-                    })
-    except Exception:
-        pass
-
-    # 搜索报价单
-    try:
-        for kw in top_keywords:
-            query = (
-                select(BusinessDocument)
-                .where(
-                    BusinessDocument.doc_type == "quote",
-                    BusinessDocument.deleted_at.is_(None),
-                    or_(
-                        BusinessDocument.doc_no.ilike(f"%{kw}%"),
-                        BusinessDocument.customer_name.ilike(f"%{kw}%"),
-                        BusinessDocument.project_name.ilike(f"%{kw}%"),
-                    ),
-                )
-                .order_by(BusinessDocument.updated_at.desc())
-                .limit(3)
-            )
-            rows = (await db.execute(query)).scalars().all()
-            for q in rows:
-                qid = str(q.id)
-                if qid not in seen_ids:
-                    seen_ids.add(qid)
-                    results.append({
-                        "id": qid,
-                        "type": "quote",
-                        "title": f"报价单 #{q.doc_no}",
-                        "subtitle": f"客户: {q.customer_name or '-'}",
-                        "status": q.status,
-                        **({"amount": float(q.total_amount) if q.total_amount else None}
                            if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
                     })
     except Exception:
@@ -854,7 +844,9 @@ async def upload_chat_file(
 
     # 文件大小限制
     max_size = 50 * 1024 * 1024  # 50MB
-    file_content = await file.read()
+    file_content = await read_upload(file, max_bytes=max_size)
+    from app.core.file_security import validate_attachment_content
+    validate_attachment_content(file.filename, file_content)
     if len(file_content) > max_size:
         raise HTTPException(status_code=400, detail="文件大小不能超过50MB")
 
@@ -868,7 +860,8 @@ async def upload_chat_file(
     # 生成保存路径
     ext = os.path.splitext(file.filename or "")[1]
     date_dir = datetime.utcnow().strftime("%Y%m%d")
-    upload_dir = os.path.join(os.environ.get("LOCAL_UPLOAD_DIR", "uploads"), "chat", date_dir)
+    from app.core.config import settings
+    upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, "chat", date_dir)
     os.makedirs(upload_dir, exist_ok=True)
 
     filename = f"{uuid.uuid4().hex}{ext}"
@@ -877,6 +870,8 @@ async def upload_chat_file(
     # 保存文件
     with open(filepath, "wb") as f:
         f.write(file_content)
+    from app.services.file_access_service import register_upload
+    await register_upload(db, filepath, current_user, None, conversation_id=conversation_id)
 
     # 返回文件信息
     relative_path = f"/uploads/chat/{date_dir}/{filename}"
@@ -935,7 +930,7 @@ async def share_business_card(
     # 广播消息
     await broadcast_new_message(conv_uuid, message, current_user.id)
 
-    return success(_serialize_chat_message(message, current_user))
+    return success(await _visible_chat_message(db, message, current_user))
 
 
 async def _get_card_data(
@@ -949,9 +944,11 @@ async def _get_card_data(
     from app.models.task import DesignTask, ProductionTask, InstallationTask
     from app.models.customer import Customer, CustomerContact
 
+    if not _can_lookup(card_type, viewer):
+        return None
     if card_type == "order":
         obj = await db.get(BusinessDocument, card_id)
-        if obj:
+        if obj and obj.doc_type == "order" and obj.deleted_at is None:
             # 加载关联客户
             await db.refresh(obj, ["customer"])
             customer_name = obj.customer.name if obj.customer else "-"
@@ -963,16 +960,6 @@ async def _get_card_data(
                 "customer_id": str(obj.customer_id) if obj.customer_id else None,
             }
             return _redact_chat_payload(card, viewer)
-    elif card_type == "quote":
-        obj = await db.get(BusinessDocument, card_id)
-        if obj:
-            card = {
-                "title": f"报价单 #{obj.doc_no}",
-                "subtitle": f"客户: {obj.customer_name or '-'}",
-                "status": obj.status,
-                "amount": float(obj.total_amount) if obj.total_amount else None,
-            }
-            return _redact_chat_payload(card, viewer)
     elif card_type == "task":
         # 尝试不同任务类型
         task_configs = [
@@ -981,7 +968,9 @@ async def _get_card_data(
             (InstallationTask, "installation_no", "安装", "installation"),
         ]
         for TaskModel, no_field, label, task_type in task_configs:
-            obj = await db.get(TaskModel, card_id)
+            if viewer is not None and not user_has_permission(viewer, f"{task_type}_task:read"):
+                continue
+            obj = await get_visible_task(db, TaskModel, card_id, viewer)
             if obj:
                 no_val = getattr(obj, no_field)
                 subtitle = getattr(obj, "project_name", None) or (getattr(obj, "description", "") or "")[:50] or "-"
@@ -993,7 +982,7 @@ async def _get_card_data(
                 }
     elif card_type == "customer":
         obj = await db.get(Customer, card_id)
-        if obj:
+        if obj and obj.deleted_at is None:
             await db.refresh(obj, ["contacts"])
             primary_contact = next((ct.name for ct in obj.contacts if ct.is_primary), obj.contacts[0].name if obj.contacts else "-")
             return {
@@ -1118,7 +1107,7 @@ async def batch_share_cards(
     )
     message = await service.send_message(conversation_id, current_user.id, data)
     await broadcast_new_message(conversation_id, message, current_user.id)
-    return success(_serialize_chat_message(message, current_user))
+    return success(await _visible_chat_message(db, message, current_user))
 
 
 # ============ WebSocket ============
@@ -1195,12 +1184,15 @@ async def handle_ws_message(user_id: uuid.UUID, message: dict) -> None:
             from app.core.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 service = ChatService(db)
-                await service.mark_read(
+                marked = await service.mark_read(
                     uuid.UUID(conversation_id),
                     uuid.UUID(message_id),
                     user_id,
                 )
                 await db.commit()
+
+                if not marked:
+                    return
 
                 # 广播已读状态给会话成员
                 await broadcast_to_conversation(
@@ -1235,10 +1227,12 @@ async def broadcast_new_message(
         for member in members:
             if member.user_id != sender_id:
                 recipient = await db.get(User, member.user_id)
+                if not recipient or not recipient.is_active or recipient.deleted_at or recipient.must_change_password:
+                    continue
                 await broadcast_to_user(member.user_id, {
                     "type": "new_message",
                     "data": {
-                        "message": _serialize_chat_message(message, recipient),
+                        "message": await _visible_chat_message(db, message, recipient),
                         "conversation_id": str(conversation_id),
                     }
                 })

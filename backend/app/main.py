@@ -444,7 +444,8 @@ async def database_write_conflict(request: Request, exc: DBAPIError):
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Mount uploads BEFORE frontend — more specific paths must come first
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+from app.api.files import router as private_files_router
+app.include_router(private_files_router)
 
 # Mount the Vue SPA frontend as catch-all (html=True enables SPA fallback)
 if os.path.isdir(FRONTEND_DIR):

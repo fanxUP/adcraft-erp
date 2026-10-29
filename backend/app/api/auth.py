@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -7,17 +7,20 @@ from app.models.user import User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, UserPreferencesUpdate
 from app.schemas.common import success
 from app.services.auth_service import AuthService
+from app.api.files import FILE_COOKIE, set_file_cookie
+from app.core.deps import security_scheme
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login")
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(data: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
     result = await service.authenticate(data)
     if not result:
         raise HTTPException(status_code=401, detail="工号或密码错误")
     user, token = result
+    set_file_cookie(response, request, token)
     return success({
         "token": token,
         "username": user.username,
@@ -27,10 +30,18 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me")
-async def me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def me(request: Request, response: Response, credentials=Depends(security_scheme), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if credentials:
+        set_file_cookie(response, request, credentials.credentials)
     service = AuthService(db)
     profile = await service.get_profile(current_user.id)
     return success(profile)
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(FILE_COOKIE, path="/uploads", httponly=True, samesite="strict")
+    return success(None)
 
 
 @router.patch("/preferences")

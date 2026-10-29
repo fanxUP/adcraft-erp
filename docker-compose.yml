@@ -126,8 +126,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     command: >
       sh -c "
-        apk add --no-cache postgresql-client >/dev/null 2>&1 &&
-        echo '0 2 * * * cd / && sh /scripts/backup.sh >> /var/log/backup.log 2>&1' | crontab - &&
+        apk add --no-cache postgresql-client bash python3 >/dev/null 2>&1 &&
+        echo '0 2 * * * cd / && bash /scripts/backup.sh >> /var/log/backup.log 2>&1' | crontab - &&
         echo 'Backup scheduler started — backups run daily at 2:00 AM' &&
         crond -b -l 2 &&
         while true; do sleep 3600; done

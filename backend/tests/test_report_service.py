@@ -211,6 +211,8 @@ async def test_dashboard_amounts_use_order_date_and_payment_date(service):
     payment_statement = db.execute.await_args.args[0]
     assert "payments.paid_at" in str(payment_statement)
     assert "payments.created_at" not in str(payment_statement)
+    assert "payments.paid_at < " in str(payment_statement)
+    assert "payments.paid_at <= " not in str(payment_statement)
 
 
 @pytest.mark.asyncio

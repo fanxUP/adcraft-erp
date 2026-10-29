@@ -1,5 +1,7 @@
 """AI Site Photo API — analyze installation site photos for risks."""
 
+from app.core.file_security import read_upload
+
 import logging
 import os
 from datetime import UTC, datetime
@@ -47,7 +49,7 @@ async def analyze_site_photo(
     Returns checklist + AI findings (when available).
     """
     # 1. Save file
-    file_bytes = await file.read()
+    file_bytes = await read_upload(file)
     month_dir = _utc_month_dir()
     upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, month_dir)
     os.makedirs(upload_dir, exist_ok=True)

@@ -1,5 +1,7 @@
 """CDR 设计文件服务 - 文件上传、SVG 解析、AI 报价辅助。"""
 
+from app.core.file_security import read_upload
+
 import os
 import uuid
 import logging
@@ -96,7 +98,7 @@ class CdrDesignService:
 
         safe_name = uuid.uuid4().hex + ext
         file_path = os.path.join(self.upload_dir, safe_name)
-        content = await file.read()
+        content = await read_upload(file)
         with open(file_path, "wb") as f:
             f.write(content)
 

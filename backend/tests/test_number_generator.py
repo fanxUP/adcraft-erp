@@ -22,6 +22,20 @@ from app.services.number_generator import (
 from tests.conftest import MockResult
 
 
+@pytest.mark.asyncio
+async def test_number_order_is_numeric_after_width_overflow(mock_db):
+    import importlib
+    import pkgutil
+    import app.models
+    for module in pkgutil.iter_modules(app.models.__path__):
+        importlib.import_module(f"app.models.{module.name}")
+    mock_db.execute.return_value = MockResult(scalar_return=None)
+    await generate_order_no(mock_db)
+    sql = str(mock_db.execute.call_args.args[0])
+    assert "CAST(" in sql and "split_part" in sql
+
+
+
 @pytest.fixture
 def mock_db():
     """Create a mock DB session with configurable execute return."""

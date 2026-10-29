@@ -99,6 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    void fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' })
     // Disconnect notification WebSocket
     const notificationStore = useNotificationStore()
     notificationStore.disconnectWebSocket()

@@ -68,13 +68,18 @@ def _generate_env(env_file: Path):
     import secrets
 
     secret = secrets.token_hex(32)
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("首次安装请先配置 DATABASE_URL，不能使用固定数据库口令")
+    sync_url = os.environ.get("DATABASE_URL_SYNC") or database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    env_file.touch(mode=0o600, exist_ok=False)
     env_file.write_text(
         f"# AdCraft ERP — auto-generated configuration\n"
         f"APP_NAME=AdCraft ERP\n"
         f"APP_ENV=production\n"
         f"SECRET_KEY={secret}\n"
-        f"DATABASE_URL=postgresql+asyncpg://adcraft:adcraft_prod@127.0.0.1:5432/adcraft_erp\n"
-        f"DATABASE_URL_SYNC=postgresql+psycopg2://adcraft:adcraft_prod@127.0.0.1:5432/adcraft_erp\n"
+        f"DATABASE_URL={database_url}\n"
+        f"DATABASE_URL_SYNC={sync_url}\n"
         f"REDIS_URL=\n"
         f"UPLOAD_STORAGE=local\n"
         f"LOCAL_UPLOAD_DIR={EXE_DIR / 'uploads'}\n"
@@ -99,15 +104,15 @@ def _resolve_runtime_env_file() -> Path:
 
 
 def _apply_db_defaults():
-    """Set default DATABASE_URL if not configured."""
-    if not os.environ.get("DATABASE_URL"):
-        os.environ["DATABASE_URL"] = (
-            "postgresql+asyncpg://adcraft:adcraft_prod@127.0.0.1:5432/adcraft_erp"
-        )
-    if not os.environ.get("DATABASE_URL_SYNC"):
-        os.environ["DATABASE_URL_SYNC"] = (
-            "postgresql+psycopg2://adcraft:adcraft_prod@127.0.0.1:5432/adcraft_erp"
-        )
+    """Load the explicit deployment configuration; never invent credentials."""
+    from dotenv import dotenv_values
+    values = dotenv_values(_resolve_runtime_env_file())
+    database_url = os.environ.get("DATABASE_URL") or values.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("缺少 DATABASE_URL，请配置部署环境文件或进程环境变量")
+    os.environ.setdefault("DATABASE_URL", database_url)
+    sync_url = os.environ.get("DATABASE_URL_SYNC") or values.get("DATABASE_URL_SYNC")
+    os.environ["DATABASE_URL_SYNC"] = sync_url or database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
 
 # ---------------------------------------------------------------------------
@@ -127,10 +132,9 @@ def _run_alembic():
         alembic_cfg = AlembicConfig()
         alembic_cfg.set_main_option("script_location", str(alembic_dir))
         # Use sync URL for alembic
-        sync_url = os.environ.get(
-            "DATABASE_URL_SYNC",
-            "postgresql+psycopg2://adcraft:adcraft_prod@127.0.0.1:5432/adcraft_erp",
-        )
+        sync_url = os.environ.get("DATABASE_URL_SYNC")
+        if not sync_url:
+            raise RuntimeError("缺少 DATABASE_URL_SYNC")
         alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
         command.upgrade(alembic_cfg, "head")
         print("✅ Migrations complete")

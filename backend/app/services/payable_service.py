@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, literal, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +21,8 @@ from app.models.business_document import BusinessDocument
 from app.models.payment import Expense
 from app.models.payable import PayablePayment
 from app.models.project_cost import ProjectCost, ProjectCostItemLink
+from app.models.customer import Customer
+from app.models.outsource import OutsourceVendor
 from app.services.company_account_service import CompanyAccountService
 from app.services.number_generator import generate_payable_payment_no
 
@@ -130,19 +132,65 @@ class PayableService:
             selectinload(ProjectCost.supplier),
         )
 
-    async def _load_sources(self) -> list[tuple[str, object]]:
+    async def _page_source_keys(self, page, page_size, keyword, status, source_type, supplier_id):
+        """Filter and page in SQL before loading any ORM relationships."""
+        payments = select(
+            PayablePayment.source_type.label("source_type"), PayablePayment.source_id.label("source_id"),
+            func.sum(PayablePayment.amount).label("paid"), func.count().label("payment_count"),
+        ).where(PayablePayment.is_voided.is_(False)).group_by(
+            PayablePayment.source_type, PayablePayment.source_id).cte("payable_totals")
+        branches = []
+        for kind, model, amount, date, number, payee in (
+            ("project_cost", ProjectCost, ProjectCost.debt_amount, ProjectCost.cost_date, ProjectCost.cost_no, ProjectCost.payee_company_name),
+            ("expense", Expense, Expense.payable_amount, Expense.expense_date, Expense.expense_no, Expense.payee_name),
+        ):
+            if source_type and kind != source_type:
+                continue
+            paid = func.coalesce(payments.c.paid, 0)
+            if kind == "project_cost":
+                paid = case((and_(ProjectCost.is_settled.is_(True), func.coalesce(payments.c.payment_count, 0) == 0), amount), else_=paid)
+            paid = func.greatest(0, func.least(paid, amount))
+            state = case((paid >= amount, "paid"), (paid > 0, "partial"), else_="unpaid")
+            query = select(literal(kind).label("source_type"), model.id.label("source_id"),
+                func.coalesce(date, model.created_at).label("source_date")).outerjoin(payments,
+                and_(payments.c.source_type == kind, payments.c.source_id == model.id))
+            query = query.outerjoin(OutsourceVendor, model.supplier_id == OutsourceVendor.id)
+            terms = [number, func.coalesce(OutsourceVendor.name, payee), model.category, model.description]
+            if kind == "project_cost":
+                query = query.outerjoin(BusinessDocument, ProjectCost.document_id == BusinessDocument.id).outerjoin(Customer, ProjectCost.customer_id == Customer.id)
+                terms += [BusinessDocument.doc_no, BusinessDocument.project_name, func.coalesce(Customer.name, BusinessDocument.customer_name)]
+            query = query.where(model.deleted_at.is_(None), func.coalesce(amount, 0) > 0)
+            if supplier_id:
+                query = query.where(model.supplier_id == supplier_id)
+            if status:
+                query = query.where(state == status)
+            if keyword:
+                query = query.where(func.concat_ws(" ", *terms).icontains(keyword, autoescape=True))
+            branches.append(query)
+        sources = union_all(*branches).subquery("payable_sources")
+        total = int(await self.db.scalar(select(func.count()).select_from(sources)) or 0)
+        result = await self.db.execute(select(sources.c.source_type, sources.c.source_id).order_by(
+            sources.c.source_date.desc().nulls_last(), sources.c.source_type, sources.c.source_id,
+        ).offset((page - 1) * page_size).limit(page_size))
+        return list(result.all()), total
+
+    async def _load_sources(self, keys) -> list[tuple[str, object]]:
+        if not keys:
+            return []
         cost_result = await self.db.execute(
             select(ProjectCost)
             .options(*self._source_load_options())
             .where(
                 ProjectCost.deleted_at.is_(None),
                 func.coalesce(ProjectCost.debt_amount, 0) > 0,
+                ProjectCost.id.in_([key for kind, key in keys if kind == "project_cost"]),
             )
         )
         expense_result = await self.db.execute(
             select(Expense).options(selectinload(Expense.supplier)).where(
                 Expense.deleted_at.is_(None),
                 func.coalesce(Expense.payable_amount, 0) > 0,
+                Expense.id.in_([key for kind, key in keys if kind == "expense"]),
             )
         )
         return [
@@ -394,14 +442,8 @@ class PayableService:
         if status and status not in PAYABLE_STATUS_LABELS:
             raise ValueError("不支持的应付状态")
         normalized_type = _normalize_source_type(source_type) if source_type else None
-        sources = await self._load_sources()
-        if normalized_type:
-            sources = [item for item in sources if item[0] == normalized_type]
-        if supplier_id:
-            sources = [
-                item for item in sources
-                if getattr(item[1], "supplier_id", None) == supplier_id
-            ]
+        keys, total = await self._page_source_keys(page, page_size, keyword, status, normalized_type, supplier_id)
+        sources = await self._load_sources(keys)
 
         summary = await self._payment_summary(
             [(source_type_value, source.id) for source_type_value, source in sources]
@@ -410,30 +452,11 @@ class PayableService:
         for source_type_value, source in sources:
             paid, count = summary.get((source_type_value, source.id), (Decimal("0"), 0))
             row = self._source_payload(source_type_value, source, paid, count)
-            if status and row["status"] != status:
-                continue
-            if keyword:
-                haystack = " ".join(
-                    str(row.get(key) or "")
-                    for key in (
-                        "source_no",
-                        "order_no",
-                        "quote_no",
-                        "project_name",
-                        "customer_name",
-                        "payee_name",
-                        "category",
-                        "description",
-                    )
-                ).casefold()
-                if keyword.casefold() not in haystack:
-                    continue
             rows.append(row)
 
-        rows.sort(key=lambda row: row.get("source_date") or "", reverse=True)
-        total = len(rows)
-        skip = (page - 1) * page_size
-        return rows[skip : skip + page_size], total
+        positions = {(kind, str(key)): index for index, (kind, key) in enumerate(keys)}
+        rows.sort(key=lambda row: positions[(row["source_type"], row["source_id"])])
+        return rows, total
 
     async def get_payable(self, source_type: str, source_id: UUID) -> dict | None:
         normalized_type = _normalize_source_type(source_type)

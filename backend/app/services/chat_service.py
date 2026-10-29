@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat import Conversation, ConversationMember, Message
@@ -372,6 +373,11 @@ class ChatService:
         if not is_member:
             raise ValueError("不是会话成员")
 
+        if data.reply_to_id:
+            reply = await self.message_repo.get_by_id(data.reply_to_id)
+            if not reply or reply.conversation_id != conversation_id or reply.deleted_at is not None:
+                raise ValueError("回复消息不属于当前会话或已删除")
+
         # 创建消息
         message = Message(
             conversation_id=conversation_id,
@@ -504,6 +510,9 @@ class ChatService:
         if not is_member:
             return False
 
+        message = await self.db.get(Message, message_id)
+        if not message or message.conversation_id != conversation_id or message.deleted_at is not None:
+            return False
         await self.read_receipt_repo.mark_read(message_id, user_id)
         await self.member_repo.update_last_read(conversation_id, user_id)
         await self.db.commit()
@@ -622,6 +631,9 @@ class ChatService:
                         name = user.real_name or user.username
                     break
 
+        last_kind = await self.db.scalar(select(Message.type).where(
+            Message.conversation_id == conversation.id, Message.deleted_at.is_(None)
+        ).order_by(Message.created_at.desc(), Message.id.desc()).limit(1))
         return ConversationResponse(
             id=conversation.id,
             type=conversation.type,
@@ -629,7 +641,7 @@ class ChatService:
             avatar=avatar,
             owner_id=conversation.owner_id,
             last_message_at=conversation.last_message_at,
-            last_message_content=conversation.last_message_content,
+            last_message_content="业务卡片" if last_kind == "card" else conversation.last_message_content,
             last_message_sender_id=conversation.last_message_sender_id,
             last_message_sender_name=last_message_sender_name,
             unread_count=unread_count,
@@ -652,8 +664,8 @@ class ChatService:
         reply_to_sender_name = None
         if message.reply_to_id:
             reply_msg = await self.message_repo.get_by_id(message.reply_to_id)
-            if reply_msg:
-                reply_to_content = reply_msg.content[:100] if reply_msg.content else None
+            if reply_msg and reply_msg.conversation_id == message.conversation_id and reply_msg.deleted_at is None:
+                reply_to_content = "业务卡片" if reply_msg.type == "card" else (reply_msg.content[:100] if reply_msg.content else None)
                 if reply_msg.sender:
                     reply_to_sender_name = reply_msg.sender.real_name or reply_msg.sender.username
 

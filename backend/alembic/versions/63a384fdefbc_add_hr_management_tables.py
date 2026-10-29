@@ -17,6 +17,59 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Early native installs created these three tables outside Alembic. Keep
+    # their historical structure here (not today's ORM metadata), so later
+    # revisions can replay normally and existing installations are untouched.
+    tables = sa.inspect(op.get_bind()).get_table_names()
+    if 'employees' not in tables:
+        op.create_table('employees',
+            sa.Column('id', sa.UUID(), primary_key=True),
+            sa.Column('employee_no', sa.String(32), nullable=False, unique=True),
+            sa.Column('name', sa.String(64), nullable=False),
+            *[sa.Column(name, sa.String(size), nullable=True) for name, size in (
+                ('phone', 32), ('gender', 8), ('department', 32), ('position', 64),
+                ('employment_type', 16), ('id_card', 32), ('education', 32),
+                ('emergency_contact', 32), ('emergency_phone', 32),
+                ('bank_name', 128), ('bank_account', 64), ('address', 500),
+            )],
+            sa.Column('birth_date', sa.Date()), sa.Column('hire_date', sa.Date()),
+            sa.Column('resignation_date', sa.Date()),
+            sa.Column('employment_status', sa.String(16), nullable=False, server_default='active'),
+            sa.Column('base_salary', sa.Numeric(14, 2)),
+            sa.Column('skills', postgresql.JSONB()),
+            sa.Column('user_id', sa.UUID(), sa.ForeignKey('users.id')),
+            sa.Column('remark', sa.Text()),
+            sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column('deleted_at', sa.DateTime()),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        )
+    if 'attendance_rules' not in tables:
+        op.create_table('attendance_rules',
+            sa.Column('id', sa.UUID(), primary_key=True),
+            sa.Column('name', sa.String(64), nullable=False),
+            sa.Column('department', sa.String(32)),
+            sa.Column('check_in_time', sa.Time(), nullable=False),
+            sa.Column('check_out_time', sa.Time(), nullable=False),
+            sa.Column('work_days', postgresql.JSONB()),
+            sa.Column('late_threshold', sa.Integer()),
+            sa.Column('early_leave_threshold', sa.Integer()),
+            sa.Column('overtime_rate', sa.Numeric(3, 1)),
+            sa.Column('is_active', sa.Boolean()),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        )
+    if 'attendance_records' not in tables:
+        op.create_table('attendance_records',
+            sa.Column('id', sa.UUID(), primary_key=True),
+            sa.Column('employee_id', sa.UUID(), sa.ForeignKey('employees.id'), nullable=False),
+            sa.Column('date', sa.Date(), nullable=False),
+            sa.Column('check_in_time', sa.DateTime()), sa.Column('check_out_time', sa.DateTime()),
+            sa.Column('check_in_status', sa.String(16)), sa.Column('check_out_status', sa.String(16)),
+            sa.Column('source', sa.String(16)), sa.Column('remark', sa.Text()),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        )
     # departments
     op.create_table('departments',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, default=sa.text('gen_random_uuid()')),

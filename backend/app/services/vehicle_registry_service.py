@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import os
 import uuid
 from datetime import datetime
@@ -378,7 +379,9 @@ class VehicleRegistryService(VehicleServiceBase):
         ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""
         fn = f"{uuid.uuid4().hex}.{ext}"
         fp = os.path.join(dest_dir, fn)
-        content = await file.read()
+        content = await read_upload(file)
+        from app.core.file_security import validate_attachment_content
+        validate_attachment_content(file.filename, content)
         with open(fp, "wb") as f:
             f.write(content)
         return {

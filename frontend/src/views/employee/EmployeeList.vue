@@ -127,6 +127,7 @@
   </AppPage>
 </template>
 <script setup lang="ts">
+import { passwordError } from '@/utils/password'
 import { useDepartments } from '@/composables/useDepartments'
 import { useAuthStore } from '@/stores/auth'
 import HrSectionNav from '@/components/hr/HrSectionNav.vue'
@@ -152,6 +153,7 @@ const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:null,departme
 const form=ref<any>({...initForm})
 const DATE_FIELDS = ["birth_date", "hire_date", "resignation_date", "license_expire_date"] as const
 function getEmployeePayload(){
+  if(!isEditing.value && form.value.initial_password){const error=passwordError(form.value.initial_password);if(error){ElMessage.error(error);throw new Error(error)}}
   const payload={...form.value}
   delete payload.user_id
   if(isEditing.value){ delete payload.role_ids; delete payload.initial_password }

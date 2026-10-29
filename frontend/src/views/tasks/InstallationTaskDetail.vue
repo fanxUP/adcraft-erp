@@ -42,6 +42,23 @@
         :extra-fields="installationOverviewFields"
       />
 
+      <AiInstallationDraftCard
+        v-if="installationDraft"
+        :draft="installationDraft"
+        :current-values="{ address: task.address || '', scheduled_at: task.scheduled_at || '' }"
+        @apply="openPreparationDraft"
+      />
+      <el-dialog v-model="preparationVisible" title="核对安装准备信息" width="520px">
+        <el-form label-width="100px">
+          <el-form-item label="安装地址"><el-input v-model="preparationForm.address" /></el-form-item>
+          <el-form-item label="计划安装时间"><el-date-picker v-model="preparationForm.scheduled_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" /></el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="preparationVisible = false">取消</el-button>
+          <el-button type="primary" :loading="preparationSaving" @click="savePreparation">确认保存</el-button>
+        </template>
+      </el-dialog>
+
       <TaskOrderItemLinkCard
         :task-type="'installation'"
         :task-id="task.id"
@@ -91,12 +108,14 @@
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import AiInstallationDraftCard from '@/components/ai-assistant/AiInstallationDraftCard.vue'
+import { applyInstallationDraft } from '@/utils/installationDraft'
 import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { acknowledgeTaskOrderReview, getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
+import { acknowledgeTaskOrderReview, getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
 import { ElMessage } from 'element-plus'
 import { formatApiError } from '@/api/requestContract'
 import type { InstallationTaskResponse } from '@/types/api'
@@ -119,6 +138,40 @@ const completionSuccessKey = ref(0)
 let fetchVersion = 0
 const acknowledgingReview = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
+const preparationVisible = ref(false)
+const preparationSaving = ref(false)
+const preparationForm = reactive({ assigned_to: '', address: '', scheduled_at: '' })
+const installationDraft = computed(() => {
+  const guide = aiStore.activePageGuide
+  if (!task.value || guide?.target_path !== route.path || guide.target_key !== 'installation-draft'
+    || !authStore.can('installation_task:update') || ['completed', 'cancelled'].includes(task.value.status)) return null
+  const draft = guide.draft
+  return draft ? { ...draft, fields: draft.fields.filter(field => ['address', 'scheduled_at'].includes(field.key)) } : null
+})
+
+function openPreparationDraft() {
+  if (!task.value || !installationDraft.value) return
+  preparationForm.address = task.value.address || ''
+  preparationForm.scheduled_at = task.value.scheduled_at || ''
+  applyInstallationDraft(preparationForm, installationDraft.value)
+  preparationVisible.value = true
+}
+
+async function savePreparation() {
+  if (!task.value || preparationSaving.value) return
+  preparationSaving.value = true
+  try {
+    await updateInstallationTask(task.value.id, {
+      address: preparationForm.address, scheduled_at: preparationForm.scheduled_at || undefined,
+    })
+    preparationVisible.value = false
+    ElMessage.success('安装准备信息已保存')
+    await fetchTask()
+    void aiStore.notifyBusinessMutation().catch(() => undefined)
+  } catch (cause) {
+    ElMessage.error(formatApiError(cause, '保存失败，请核对后重试'))
+  } finally { preparationSaving.value = false }
+}
 const installationOverviewFields = computed(() => [
   { label: '安装地址', value: task.value?.address, wide: true },
   { label: '计划安装时间', value: formatDateTimeFull(task.value?.scheduled_at) },
@@ -221,6 +274,7 @@ function handleBack() {
 watch(() => route.params.id, () => {
   task.value = null
   deleteVisible.value = false
+  preparationVisible.value = false
   void fetchTask()
 }, { immediate: true })
 

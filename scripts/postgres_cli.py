@@ -87,6 +87,7 @@ def _run(command: str, file_path: Path, project_dir: Path) -> None:
     else:
         arguments = [
             "psql",
+            "-X", "-v", "ON_ERROR_STOP=1",
             "-h",
             host,
             "-p",

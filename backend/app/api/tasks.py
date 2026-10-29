@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import os
 import uuid as _uuid
 from datetime import datetime, timezone
@@ -1054,6 +1055,23 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if related_type in {"order_item", "acceptance_item"}:
+        allowed = ("order:create", "order:update") if related_type == "order_item" else ("acceptance:update", "acceptance:create")
+        permission = next((code for code in allowed if _user_has_permission(current_user, code)), None)
+        if permission is None:
+            raise HTTPException(403, "没有上传样图的权限")
+        from app.core.file_security import validate_attachment_content
+        from app.services.file_access_service import register_upload
+        contents = await read_upload(file)
+        if Path(file.filename or "").suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            raise HTTPException(400, "样图仅支持 PNG、JPEG、WebP 图片")
+        validate_attachment_content(file.filename, contents)
+        relative = f"{datetime.now(timezone.utc):%Y%m}/{uuid4().hex}{Path(file.filename).suffix.lower()}"
+        target = Path(settings.LOCAL_UPLOAD_DIR) / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(contents)
+        await register_upload(db, target, current_user, permission)
+        return {"code": 0, "message": "ok", "data": {"file_path": relative}}
     task_model = _TASK_ATTACHMENT_TASK_MODELS.get(related_type)
     stage = {
         "design_task": "design",
@@ -1079,7 +1097,7 @@ async def upload_attachment(
         "username",
         None,
     )
-    contents = await file.read()
+    contents = await read_upload(file, max_bytes=TASK_ATTACHMENT_FILE_MAX_BYTES)
     if stage == "installation":
         message, safe_extension, category = validate_installation_media(
             file.content_type,

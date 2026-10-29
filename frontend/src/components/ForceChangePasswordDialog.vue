@@ -17,7 +17,7 @@
         <el-input v-model="form.old_password" type="password" show-password maxlength="128" placeholder="请输入当前密码" />
       </el-form-item>
       <el-form-item label="新密码" prop="new_password">
-        <el-input v-model="form.new_password" type="password" show-password maxlength="128" placeholder="6-128 位" />
+        <el-input v-model="form.new_password" type="password" show-password maxlength="128" placeholder="至少 6 位，最多 72 个 UTF-8 字节" />
       </el-form-item>
       <el-form-item label="确认密码" prop="confirm_password">
         <el-input v-model="form.confirm_password" type="password" show-password maxlength="128" placeholder="再次输入新密码" />
@@ -36,6 +36,7 @@ import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { passwordError } from '@/utils/password'
 import { changePassword } from '@/api/auth'
 
 const authStore = useAuthStore()
@@ -59,7 +60,7 @@ const rules: FormRules = {
     new_password: [
       { required: true, message: '请输入新密码', trigger: 'blur' },
       { min: 6, message: '新密码至少 6 位', trigger: 'blur' },
-      { max: 128, message: '新密码不能超过 128 位', trigger: 'blur' },
+      { validator: (_rule, value, callback) => { const error = passwordError(value || ''); callback(error ? new Error(error) : undefined) }, trigger: 'blur' },
       {
         validator: (_rule, value, callback) => {
           if (value && value === form.old_password) callback(new Error('新密码不能与原密码相同'))

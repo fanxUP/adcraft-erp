@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
+from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, validate_new_password
 
 THEME_VALUES = frozenset({"light-blue", "light-white", "dark-blue"})
 FONT_SIZE_VALUES = frozenset({12, 13, 14, 15, 16, 18, 20})
@@ -32,6 +32,7 @@ class ChangePasswordRequest(BaseModel):
 
     @model_validator(mode="after")
     def ensure_new_password_is_different(self):
+        validate_new_password(self.new_password)
         if self.old_password == self.new_password:
             raise ValueError("新密码不能与原密码相同")
         return self

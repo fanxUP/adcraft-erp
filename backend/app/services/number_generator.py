@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import Numeric, cast, func, select, text
 
 
 EMPLOYEE_NUMBER_LOCK_ID = 9_240_321_991
@@ -20,49 +20,49 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(BusinessDocument.doc_no).where(
                 BusinessDocument.doc_no.like(pattern)
-            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
+            ).where(BusinessDocument.doc_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(BusinessDocument.doc_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "C":
         from app.models.customer import Customer
         result = await db.execute(
-            select(Customer.customer_no).where(Customer.customer_no.like(pattern)).order_by(Customer.customer_no.desc()).limit(1)
+            select(Customer.customer_no).where(Customer.customer_no.like(pattern)).where(Customer.customer_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(Customer.customer_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "D":
         from app.models.task import DesignTask
         result = await db.execute(
-            select(DesignTask.design_no).where(DesignTask.design_no.like(pattern)).order_by(DesignTask.design_no.desc()).limit(1)
+            select(DesignTask.design_no).where(DesignTask.design_no.like(pattern)).where(DesignTask.design_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(DesignTask.design_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "P":
         from app.models.task import ProductionTask
         result = await db.execute(
-            select(ProductionTask.production_no).where(ProductionTask.production_no.like(pattern)).order_by(ProductionTask.production_no.desc()).limit(1)
+            select(ProductionTask.production_no).where(ProductionTask.production_no.like(pattern)).where(ProductionTask.production_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(ProductionTask.production_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "I":
         from app.models.task import InstallationTask
         result = await db.execute(
-            select(InstallationTask.installation_no).where(InstallationTask.installation_no.like(pattern)).order_by(InstallationTask.installation_no.desc()).limit(1)
+            select(InstallationTask.installation_no).where(InstallationTask.installation_no.like(pattern)).where(InstallationTask.installation_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(InstallationTask.installation_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "PAY":
         from app.models.payment import Payment
         result = await db.execute(
-            select(Payment.payment_no).where(Payment.payment_no.like(pattern)).order_by(Payment.payment_no.desc()).limit(1)
+            select(Payment.payment_no).where(Payment.payment_no.like(pattern)).where(Payment.payment_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(Payment.payment_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "STMT":
         from app.models.payment import CustomerStatement
         result = await db.execute(
-            select(CustomerStatement.statement_no).where(CustomerStatement.statement_no.like(pattern)).order_by(CustomerStatement.statement_no.desc()).limit(1)
+            select(CustomerStatement.statement_no).where(CustomerStatement.statement_no.like(pattern)).where(CustomerStatement.statement_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(CustomerStatement.statement_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "EXP":
         from app.models.payment import Expense
         result = await db.execute(
-            select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
+            select(Expense.expense_no).where(Expense.expense_no.like(pattern)).where(Expense.expense_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(Expense.expense_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "APP":
         from app.models.payable import PayablePayment
         result = await db.execute(
             select(PayablePayment.payment_no).where(
                 PayablePayment.payment_no.like(pattern)
-            ).order_by(PayablePayment.payment_no.desc()).limit(1)
+            ).where(PayablePayment.payment_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(PayablePayment.payment_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "Q":
         from app.models.business_document import BusinessDocument
@@ -70,7 +70,7 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
             select(BusinessDocument.doc_no).where(
                 BusinessDocument.doc_type == "quote",
                 BusinessDocument.doc_no.like(pattern),
-            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
+            ).where(BusinessDocument.doc_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(BusinessDocument.doc_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "SO":
         # 兼容旧销售单编号格式
@@ -78,29 +78,29 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(BusinessDocument.doc_no).where(
                 BusinessDocument.doc_no.like(pattern)
-            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
+            ).where(BusinessDocument.doc_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(BusinessDocument.doc_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "V":
         from app.models.outsource import OutsourceVendor
         result = await db.execute(
-            select(OutsourceVendor.vendor_no).where(OutsourceVendor.vendor_no.like(pattern)).order_by(OutsourceVendor.vendor_no.desc()).limit(1)
+            select(OutsourceVendor.vendor_no).where(OutsourceVendor.vendor_no.like(pattern)).where(OutsourceVendor.vendor_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(OutsourceVendor.vendor_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "OT":
         from app.models.outsource import OutsourceTask
         result = await db.execute(
-            select(OutsourceTask.task_no).where(OutsourceTask.task_no.like(pattern)).order_by(OutsourceTask.task_no.desc()).limit(1)
+            select(OutsourceTask.task_no).where(OutsourceTask.task_no.like(pattern)).where(OutsourceTask.task_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(OutsourceTask.task_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "OP":
         from app.models.outsource import OutsourcePayment
         result = await db.execute(
-            select(OutsourcePayment.payment_no).where(OutsourcePayment.payment_no.like(pattern)).order_by(OutsourcePayment.payment_no.desc()).limit(1)
+            select(OutsourcePayment.payment_no).where(OutsourcePayment.payment_no.like(pattern)).where(OutsourcePayment.payment_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(OutsourcePayment.payment_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "COST":
         from app.models.project_cost import ProjectCost
-        today_short = datetime.now(timezone.utc).strftime("%y%m%d")
+        today_short = today[2:]
         pattern = f"{today_short}-%"
         result = await db.execute(
-            select(ProjectCost.cost_no).where(ProjectCost.cost_no.like(pattern)).order_by(ProjectCost.cost_no.desc()).limit(1)
+            select(ProjectCost.cost_no).where(ProjectCost.cost_no.like(pattern)).where(ProjectCost.cost_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(ProjectCost.cost_no, "-", 2), Numeric).desc()).limit(1)
         )
         last = result.scalar_one_or_none()
         if last:
@@ -111,12 +111,12 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
     elif prefix == "A":
         from app.models.acceptance import AcceptanceForm
         result = await db.execute(
-            select(AcceptanceForm.acceptance_no).where(AcceptanceForm.acceptance_no.like(pattern)).order_by(AcceptanceForm.acceptance_no.desc()).limit(1)
+            select(AcceptanceForm.acceptance_no).where(AcceptanceForm.acceptance_no.like(pattern)).where(AcceptanceForm.acceptance_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(AcceptanceForm.acceptance_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "CT":
         from app.models.contract import Contract
         result = await db.execute(
-            select(Contract.contract_no).where(Contract.contract_no.like(pattern)).order_by(Contract.contract_no.desc()).limit(1)
+            select(Contract.contract_no).where(Contract.contract_no.like(pattern)).where(Contract.contract_no.op("~")(r"^[A-Za-z]*[0-9]+-[0-9]+$")).order_by(cast(func.split_part(Contract.contract_no, "-", 2), Numeric).desc()).limit(1)
         )
     elif prefix == "EMP":
         # 员工工号：纯数字序列（现有格式 001/002/...），取最大值 +1
@@ -129,7 +129,7 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
             {"lock_id": EMPLOYEE_NUMBER_LOCK_ID},
         )
         result = await db.execute(
-            select(Employee.employee_no).order_by(Employee.employee_no.desc()).limit(1)
+            select(Employee.employee_no).where(Employee.employee_no.op("~")(r"^[0-9]+$")).order_by(cast(Employee.employee_no, Numeric).desc()).limit(1)
         )
         last = result.scalar_one_or_none()
         if last:

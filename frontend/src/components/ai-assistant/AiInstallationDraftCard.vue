@@ -34,12 +34,11 @@
     <div class="draft-footer">
       <span v-if="!hasApplicableFields">暂无可自动填入项，请按提示手动完善。</span>
       <el-button
-        v-else
         type="primary"
         plain
         @click="$emit('apply')"
       >
-        应用可用建议到表单
+        {{ hasApplicableFields ? '应用可用建议到表单' : '打开表单手动填写' }}
       </el-button>
     </div>
   </el-card>

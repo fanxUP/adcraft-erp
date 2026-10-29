@@ -59,7 +59,9 @@ def service():
     repo.get_personnel = AsyncMock()
     with patch("app.services.aerial_service.AerialRepository") as MockRepoClass:
         MockRepoClass.return_value = repo
-        svc = AerialService(AsyncMock(), MagicMock(id=SAMPLE_USER_ID), "127.0.0.1")
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = AerialService(db, MagicMock(id=SAMPLE_USER_ID), "127.0.0.1")
         svc.repo = repo
         yield svc
 
@@ -90,7 +92,7 @@ async def test_create_personnel_attachment(service):
     service.repo.create_personnel_attachment.return_value = make_mock_attachment()
     file = MagicMock()
     file.filename = "x.png"
-    file.read = AsyncMock(return_value=b"abc")
+    file.read = AsyncMock(return_value=b"\x89PNG\r\n\x1a\nsynthetic")
     result = await service.create_personnel_attachment(SAMPLE_PERSONNEL_ID, file, "license")
     assert result["id"] == SAMPLE_ATTACHMENT_ID
     assert result["personnel_id"] == SAMPLE_PERSONNEL_ID
@@ -142,7 +144,7 @@ def test_personnel_to_dict_has_identity_fields(service):
 def test_save_upload_file_returns_upload_url(service):
     file = MagicMock()
     file.filename = "驾照.jpg"
-    file.read = AsyncMock(return_value=b"jpegdata")
+    file.read = AsyncMock(return_value=b"\xff\xd8\xffsynthetic")
 
     async def run():
         return await service.save_upload_file(file)
@@ -151,4 +153,4 @@ def test_save_upload_file_returns_upload_url(service):
     assert result["file_url"].startswith("/uploads/")
     assert result["file_url"].endswith(".jpg")
     assert result["file_name"] == "驾照.jpg"
-    assert result["file_size"] == 8
+    assert result["file_size"] == len(b"\xff\xd8\xffsynthetic")

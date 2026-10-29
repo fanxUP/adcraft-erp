@@ -17,14 +17,14 @@ RUN sed -i 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/
     rm -rf /var/lib/apt/lists/*
 
 # 先只复制依赖声明文件（利用 Docker 层缓存：代码变但依赖不变时无需重新安装）
-COPY pyproject.toml .
+COPY pyproject.toml requirements.txt requirements-bootstrap.txt ./
 # 创建一个最小 app 骨架让 pip 能解析包名（--no-editable 不需要完整的 app 代码）
 RUN mkdir -p app && touch app/__init__.py
 
 # pip 安装依赖（阿里云镜像加速；gcc 仅在编译 bcrypt/asyncpg 时需要）
-RUN pip install \
-    -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com \
-    --no-cache-dir .
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements-bootstrap.txt && \
+    pip install --no-cache-dir --require-hashes -r requirements.txt && \
+    pip install --no-cache-dir --no-deps . && pip check
 
 # ── 运行阶段：最小镜像，不含编译工具 ─────────────────────────
 FROM python:3.12-slim

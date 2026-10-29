@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import logging
 from datetime import date
 from urllib.parse import quote
@@ -198,7 +199,7 @@ async def preview_school_list_import(
             status_code=400,
             content=error(40001, "学校清单导入仅支持 .xlsx 格式的 Excel 文件"),
         )
-    content = await file.read()
+    content = await read_upload(file)
     try:
         preview = parse_school_quote_workbook(
             content,
@@ -225,7 +226,7 @@ async def commit_school_list_import(
             status_code=400,
             content=error(40001, "学校清单导入仅支持 .xlsx 格式的 Excel 文件"),
         )
-    content = await file.read()
+    content = await read_upload(file)
     try:
         preview = parse_school_quote_workbook(
             content,
@@ -299,7 +300,7 @@ async def preview_school_list_dimension_backfill(
             status_code=400,
             content=error(40001, "学校清单尺寸清洗仅支持 .xlsx 格式的 Excel 文件"),
         )
-    content = await file.read()
+    content = await read_upload(file)
     try:
         preview = parse_school_quote_workbook(
             content,
@@ -339,7 +340,7 @@ async def commit_school_list_dimension_backfill(
             status_code=400,
             content=error(40001, "学校清单尺寸清洗仅支持 .xlsx 格式的 Excel 文件"),
         )
-    content = await file.read()
+    content = await read_upload(file)
     try:
         preview = parse_school_quote_workbook(
             content,
@@ -387,7 +388,7 @@ async def import_quotes(
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
 
-    content = await file.read()
+    content = await read_upload(file)
     rows, header_errors = parse_excel(content, QUOTE_REQUIRED, QUOTE_COLUMN_MAP)
     if header_errors:
         return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
@@ -663,7 +664,7 @@ async def import_quote_items(
     if not quote:
         return {"code": 40401, "message": "报价不存在", "data": None}
 
-    content = await file.read()
+    content = await read_upload(file)
     rows, header_errors = parse_excel(content, QUOTE_ITEM_REQUIRED, QUOTE_ITEM_TEMPLATE_MAP)
     if header_errors:
         return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}

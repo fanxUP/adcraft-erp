@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import logging
 from uuid import UUID
 
@@ -125,7 +126,7 @@ async def import_products(
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
 
-    content = await file.read()
+    content = await read_upload(file)
     rows, header_errors = parse_excel(content, PRODUCT_REQUIRED, PRODUCT_COLUMN_MAP)
     if header_errors:
         rows, legacy_header_errors = parse_excel(content, ["产品材质工艺"], PRODUCT_COLUMN_MAP)
@@ -259,7 +260,7 @@ async def import_materials(
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
 
-    content = await file.read()
+    content = await read_upload(file)
     rows, header_errors = parse_excel(content, MATERIAL_REQUIRED, MATERIAL_COLUMN_MAP)
     if header_errors:
         return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}

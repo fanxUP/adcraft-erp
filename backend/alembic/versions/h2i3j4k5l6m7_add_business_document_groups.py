@@ -17,6 +17,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # The old native installer added this field outside the migration chain.
+    op.execute(sa.text("ALTER TABLE business_document_items ADD COLUMN IF NOT EXISTS group_id VARCHAR(255)"))
     op.create_table(
         "business_document_groups",
         sa.Column(

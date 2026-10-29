@@ -1,5 +1,7 @@
 """高空作业车台账模块 — Service 层"""
 
+from app.core.file_security import read_upload
+
 import os
 import random
 import uuid
@@ -994,9 +996,14 @@ class AerialService:
         ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""
         fn = f"{uuid.uuid4().hex}.{ext}"
         fp = os.path.join(dest_dir, fn)
-        content = await file.read()
+        content = await read_upload(file)
+        from app.core.file_security import validate_attachment_content
+        validate_attachment_content(file.filename, content)
         with open(fp, "wb") as f:
             f.write(content)
+        if self.current_user is not None:
+            from app.services.file_access_service import register_upload
+            await register_upload(self.db, fp, self.current_user, "aerial:read")
         return {
             "file_url": f"/uploads/{date_dir}/{fn}",
             "file_name": file.filename or fn,

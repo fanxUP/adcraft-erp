@@ -5,6 +5,21 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+
+
+@pytest.mark.asyncio
+async def test_task_document_keeps_existing_45mb_limit():
+    from io import BytesIO
+    from fastapi import UploadFile
+    from starlette.datastructures import Headers
+    from app.services.order_task_attachment_service import OrderTaskAttachmentService
+    data = b"PK\x03\x04" + b"x" * (21 * 1024 * 1024)
+    file = UploadFile(filename="synthetic.docx", file=BytesIO(data), headers=Headers({
+        "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }))
+    contents, extension, category = await OrderTaskAttachmentService(None)._validate_file("design", file)
+    assert len(contents) == len(data)
+    assert extension == ".docx" and category == "document"
 from fastapi import UploadFile
 
 from app.api import tasks as task_api

@@ -10,6 +10,15 @@ import pytest
 import entrypoint
 
 
+def test_missing_database_configuration_fails_without_fixed_fallback(monkeypatch, tmp_path):
+    monkeypatch.setattr(entrypoint, "EXE_DIR", tmp_path)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL_SYNC", raising=False)
+    monkeypatch.setenv("ADCRAFT_ENV_FILE", str(tmp_path / "missing.env"))
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        entrypoint._apply_db_defaults()
+
+
 def test_run_alembic_fails_closed_when_migration_directory_is_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(entrypoint, "INTERNAL_DIR", tmp_path)
 

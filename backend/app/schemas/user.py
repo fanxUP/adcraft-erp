@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
-from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
+from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, validate_new_password
 
 
 class UserCreate(BaseModel):
@@ -11,6 +11,12 @@ class UserCreate(BaseModel):
     phone: str | None = None
     email: str | None = None
     role_ids: list[str] = []
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value):
+        validate_new_password(value)
+        return value
 
 
 class UserUpdate(BaseModel):

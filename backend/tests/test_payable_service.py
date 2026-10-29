@@ -59,6 +59,7 @@ async def test_list_payables_calculates_partial_balance_from_payment_ledger():
         created_at=None,
     )
     service = PayableService(MagicMock())
+    service._page_source_keys = AsyncMock(return_value=([("expense", source_id)], 1))
     service._load_sources = AsyncMock(return_value=[("expense", expense)])
     service._payment_summary = AsyncMock(
         return_value={("expense", source_id): (Decimal("30.00"), 1)}

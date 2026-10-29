@@ -430,6 +430,7 @@ async def read_order_attachment_file(
         media_type=media_type,
         filename=attachment.filename,
         content_disposition_type="attachment" if download else "inline",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'"},
     )
 
 

@@ -19,6 +19,23 @@ os.environ["APP_ENV"] = "test"
 os.environ["LOCAL_UPLOAD_DIR"] = _test_upload_dir
 os.environ["AI_ENABLED"] = "false"
 os.environ["AI_API_KEY"] = ""
+os.environ["SECRET_KEY"] = "adcraft-isolated-test-signing-key-20261029"
+
+
+def pytest_sessionstart(session):
+    if os.getenv("CI_REQUIRE_DATABASE_TESTS") == "1":
+        required = ("EXPENDITURE_TEST_URL", "ORDER_FIRST_TEST_URL", "SUPPLIER_MIGRATION_TEST_URL", "FINANCE_RECON_MIGRATION_TEST_URL")
+        missing = [name for name in required if not os.getenv(name)]
+        if missing:
+            raise pytest.UsageError("数据库 CI 缺少隔离测试配置: " + ", ".join(missing))
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if os.getenv("CI_REQUIRE_DATABASE_TESTS") == "1":
+        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        if reporter and reporter.stats.get("skipped"):
+            reporter.write_sep("!", "数据库 CI 不允许静默跳过测试")
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 # --- Common test data ---

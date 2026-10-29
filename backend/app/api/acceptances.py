@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import os
 import uuid
 from datetime import datetime
@@ -19,10 +20,12 @@ from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.acceptance_service import AcceptanceService
+from app.core.config import settings
+from app.core.file_security import safe_upload_name, validate_attachment_content
 
 router = APIRouter(prefix="/acceptances", tags=["验收单"])
 
-UPLOAD_DIR = "uploads/acceptances"
+UPLOAD_DIR = os.path.join(settings.LOCAL_UPLOAD_DIR, "acceptances")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -195,18 +198,18 @@ async def upload_attachment(
     if not form:
         return error(40001, "验收单不存在")
 
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4().hex}{ext}"
+    filename, display_name = safe_upload_name(file.filename, uuid.uuid4().hex)
     filepath = os.path.join(UPLOAD_DIR, filename)
 
-    content = await file.read()
+    content = await read_upload(file)
+    validate_attachment_content(file.filename, content)
     with open(filepath, "wb") as f:
         f.write(content)
 
     att = await repo.add_attachment(
         acceptance_id=uuid.UUID(acceptance_id),
-        filename=file.filename,
-        filepath=filepath,
+        filename=display_name,
+        filepath="acceptances/" + filename,
         filesize=len(content),
         upload_by=current_user.id,
     )
@@ -230,8 +233,11 @@ async def delete_attachment(
     if not att or str(att.acceptance_id) != acceptance_id:
         return error(40001, "附件不存在")
 
-    if os.path.exists(att.filepath):
-        os.remove(att.filepath)
+    from app.core.file_security import confined_path
+    relative = att.filepath.removeprefix("/uploads/").removeprefix("uploads/")
+    stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, relative)
+    if os.path.exists(stored_path):
+        os.remove(stored_path)
 
     await repo.delete_attachment(att)
     return success(None)

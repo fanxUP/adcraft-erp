@@ -326,13 +326,16 @@ deploy_native() {
   nginx_changes="$(git diff --name-only "$CURRENT_COMMIT" "$TARGET_COMMIT" -- nginx)"
 
   if [ -n "$backend_changes" ]; then
-    if git diff --name-only "$CURRENT_COMMIT" "$TARGET_COMMIT" -- backend/pyproject.toml | grep -q . \
+    if git diff --name-only "$CURRENT_COMMIT" "$TARGET_COMMIT" -- backend/pyproject.toml backend/requirements.txt backend/requirements-bootstrap.txt | grep -q . \
       && [ "${INSTALL_DEPENDENCIES:-0}" != "1" ]; then
       echo "检测到 Python 依赖变更；请在确认软件源可用后使用 INSTALL_DEPENDENCIES=1 重新部署。" >&2
       return 1
     fi
     if [ "${INSTALL_DEPENDENCIES:-0}" = "1" ]; then
-      backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-build-isolation -e backend
+      backend/.venv/bin/python -m pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements-bootstrap.txt
+      backend/.venv/bin/pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements.txt
+      backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-build-isolation --no-deps -e backend
+      backend/.venv/bin/pip check
     fi
     backend/.venv/bin/python -c \
       'import alembic, asyncpg, fastapi, pydantic, sqlalchemy, uvicorn'
@@ -356,6 +359,7 @@ deploy_native() {
   fi
 
   if [ -n "$nginx_changes" ]; then
+    backend/.venv/bin/python scripts/private_uploads_nginx.py
     nginx -t
     systemctl reload nginx
   fi

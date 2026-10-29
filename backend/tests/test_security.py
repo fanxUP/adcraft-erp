@@ -10,6 +10,15 @@ from tests.conftest import SAMPLE_USER_ID, TEST_USERNAME, TEST_PASSWORD
 
 
 class TestPasswordHashing:
+    def test_multibyte_password_uses_bcrypt_byte_limit(self):
+        from app.core.password_policy import validate_new_password
+        validate_new_password("中" * 24)
+        with pytest.raises(ValueError, match="72.*字节"):
+            validate_new_password("中" * 25)
+
+    def test_overlong_login_password_returns_false(self):
+        assert verify_password("中" * 25, hash_password(TEST_PASSWORD)) is False
+
     def test_hash_and_verify_success(self):
         """Hashing a password then verifying with the same password returns True."""
         hashed = hash_password(TEST_PASSWORD)
@@ -34,6 +43,11 @@ class TestPasswordHashing:
 
 
 class TestJWTToken:
+    def test_existing_python_jose_hs256_token_remains_valid(self):
+        # Issued with python-jose 3.5 using the isolated test key, no live token.
+        token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJ1c2VybmFtZSI6ImxlZ2FjeS10ZXN0IiwiaWF0IjoxNzYwMDAwMDAwLCJleHAiOjIyMDAwMDAwMDAsInRva2VuX3ZlcnNpb24iOjF9.qfTgyKCwOfDTv2ihYhGQM0bLGnsOvVH958U23DJIP3I"
+        assert decode_access_token(token)["username"] == "legacy-test"
+
     def test_create_and_decode(self):
         """A created token can be decoded and contains correct claims."""
         token = create_access_token(SAMPLE_USER_ID, TEST_USERNAME)

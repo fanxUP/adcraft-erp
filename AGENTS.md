@@ -8,7 +8,7 @@
 
 | 依赖 | 版本 | 安装方式 |
 |---|---|---|
-| Python | >= 3.12 | `brew install python@3.12` |
+| Python | 3.12.x | `brew install python@3.12` |
 | Node.js | >= 20 | `brew install node` |
 | PostgreSQL | 16 | `brew install postgresql@16 && brew services start postgresql@16` |
 | Redis | 7 | `brew install redis && brew services start redis` |
@@ -30,7 +30,8 @@ psql -U postgres -c "CREATE DATABASE adcraft_erp OWNER adcraft;"
 cd backend
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com --only-binary :all: -e ".[dev]"
+pip install --require-hashes -r requirements-dev.txt
+pip install --no-deps -e .
 # 如果 cryptography 安装失败，先单独装：pip install --only-binary :all: cryptography
 alembic upgrade head
 python scripts/init_app.py
@@ -63,23 +64,7 @@ cd frontend && node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
 
 ### pip 安装问题处理
 
-如果 `pip install` 遇到 SSL 错误或 maturin/Rust 编译错误：
-
-```bash
-# 使用阿里云镜像 + 仅安装预编译 wheel
-pip install -i https://mirrors.aliyun.com/pypi/simple/ \
-  --trusted-host mirrors.aliyun.com \
-  --only-binary :all: \
-  -e ".[dev]"
-
-# 如果 cryptography 仍然失败，先单独安装
-pip install -i https://mirrors.aliyun.com/pypi/simple/ \
-  --trusted-host mirrors.aliyun.com \
-  --only-binary :all: cryptography
-
-# 如果 bcrypt 需要 Rust 编译，固定到 4.0.1
-pip install bcrypt==4.0.1
-```
+优先修复 Python 3.12 环境、证书或可信镜像配置，然后按锁文件重装。不要单独降级认证库，也不要修改哈希来绕过安装失败。可使用 `pip install --require-hashes --only-binary :all: -r requirements-dev.txt` 验证平台 wheel。
 
 ---
 
@@ -91,7 +76,7 @@ docker compose -p adcraft up -d
 # 访问 http://localhost
 ```
 
-数据卷通过 `docker-compose.override.yml` 映射到 `~/.adcraft-data/`，避免 iCloud 文件损坏。
+PostgreSQL、Redis 和 MinIO 使用 Docker 命名卷，避免云盘文件损坏。现有 192.168.0.102 服务器使用原生 systemd/Nginx，发布走 `deploy.sh`，不要为了更新应用切换数据库运行方式。
 
 ---
 
@@ -99,16 +84,16 @@ docker compose -p adcraft up -d
 
 ```
 backend/app/
-├── api/          # 14 个路由模块，挂载在 /api/v1
-├── services/     # 17 个业务服务
-├── repositories/ # 13 个数据仓库（Repository Pattern）
-├── models/       # 14 个 SQLAlchemy ORM 模型（UUID 主键）
-├── schemas/      # 16 个 Pydantic 请求/响应模型
+├── api/          # 业务路由，挂载在 /api/v1
+├── services/     # 业务服务与业务规则
+├── repositories/ # 数据仓库（Repository Pattern）
+├── models/       # SQLAlchemy ORM 模型（UUID 主键）
+├── schemas/      # Pydantic 请求/响应模型
 ├── core/         # config / database / permissions / deps
 └── ai/           # 可选 AI 模块（规则引擎兜底，默认关闭）
 
 frontend/src/
-├── views/        # 18 个业务视图
+├── views/        # 业务视图
 ├── api/          # Axios 封装 + JWT 拦截器
 ├── stores/       # Pinia（auth + app 主题）
 ├── router/       # 路由守卫 + 角色权限
@@ -119,7 +104,7 @@ frontend/src/
 ### 权限系统
 
 - 6 个预置角色：admin / sales / designer / production / installer / finance
-- 72 个权限码，格式 `resource:action`（如 `customer:read`, `order:delete`）
+- 权限目录以 `backend/app/core/permission_catalog.py` 和初始化脚本为准，格式 `resource:action`（如 `customer:read`, `order:delete`）
 - RBAC 依赖：`require_role("admin")` / `require_permission("customer:read")`
 
 ### 数据库
@@ -147,7 +132,7 @@ docker compose exec -T backend sh -c 'cd /app && alembic upgrade head'
 docker compose build backend
 
 # ✅ 重启服务
-docker compose up -d
+docker compose up -d --no-deps backend frontend nginx
 ```
 
 ### 持久卷配置（跨平台）
@@ -169,7 +154,7 @@ volumes:
 
 ### 数据备份
 
-系统每日凌晨 02:00 自动备份到 `backups/` 目录。手动恢复时必须通过带有文件名、路径和归档成员校验的恢复脚本：
+现有服务器的 systemd 定时器在 UTC 03:07（北京时间 11:07）备份到 `backups/`；Docker 定时器按容器时区 02:00 运行。数据库和附件各自归档并校验；异地同步须显式配置 `RCLONE_REMOTE` 和 rclone。数据库恢复必须通过带有文件名、路径和归档成员校验的恢复脚本：
 
 ```bash
 ./scripts/restore.sh backup_YYYYMMDD_HHMMSS.tar.gz
@@ -224,3 +209,11 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 # 恢复前先停止后端服务，脚本会校验文件名、路径和压缩包内唯一 SQL 成员
 ./scripts/restore.sh backup_YYYYMMDD_HHMMSS.tar.gz
 ```
+
+## 当前依赖、附件及验证约定
+
+Python 使用 3.12.x，先按哈希安装 `backend/requirements-bootstrap.txt` 中的安装工具，再分别安装开发锁 `backend/requirements-dev.txt` 或运行锁 `backend/requirements.txt`，最后 `pip install --no-deps -e backend`。不要临时降级 bcrypt 或绕过锁文件。新密码至少 6 位且不超过 72 个 UTF-8 字节，旧超限密码通过受控重设处理，不静默截断。
+
+附件目录必须通过后端授权读取；Nginx 不得配置公开 alias。附件恢复先执行 `scripts/uploads_backup.py verify`，再恢复到空隔离目录核对，不覆盖现用文件。
+
+数据库 CI 必须设置四个专用测试 URL，使用随机 schema，`CI_REQUIRE_DATABASE_TESTS=1` 禁止静默跳过；空库迁移也必须完成。审计报告和整改记录在 `docs/project-audit-2026-10-29/`。

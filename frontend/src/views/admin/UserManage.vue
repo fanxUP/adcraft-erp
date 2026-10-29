@@ -92,6 +92,7 @@
 </template>
 
 <script setup lang="ts">
+import { passwordError } from '@/utils/password'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getUsers, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getRoles, type RoleItem } from '@/api/admin'
@@ -195,7 +196,7 @@ async function handleSave() {
 async function handleResetPwd(row: UserResponse) {
   try {
     const { value } = await ElMessageBox.prompt('请输入新密码', `重置「${row.real_name || row.username}」的密码`, {
-      confirmButtonText: '确定', cancelButtonText: '取消', inputPattern: /.{6,}/, inputErrorMessage: '密码至少6位',
+      confirmButtonText: '确定', cancelButtonText: '取消', inputValidator: (value: string) => passwordError(value) || true,
     })
     if (value) {
       await resetPassword(row.id, value)

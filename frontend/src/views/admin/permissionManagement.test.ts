@@ -7,6 +7,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import type { PermissionItem, RoleItem, RolePermissionPreview } from '@/api/admin'
 import * as permissionEditor from '@/utils/permissionEditor'
 import { getErrorMessage } from '@/utils/error'
+import * as password from '@/utils/password'
 
 const api = {
   getRoles: vi.fn(), getPermissions: vi.fn(), getPermissionPacks: vi.fn(),
@@ -52,6 +53,7 @@ function mountSetup<T>(filename: string): T {
     'element-plus': { ElMessage: messages, ElMessageBox: { confirm } },
     '@/api/admin': api, '@/api/users': api, '@/components/ui': {},
     '@/utils/permissionEditor': permissionEditor, '@/utils/error': { getErrorMessage },
+    '@/utils/password': password,
   }
   const output: { exports: { default?: Vue.ComponentOptions } } = { exports: {} }
   new Function('require', 'module', 'exports', code)((id: string) => {

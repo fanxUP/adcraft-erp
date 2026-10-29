@@ -1,3 +1,4 @@
+from app.core.file_security import read_upload
 import os
 import uuid as _uuid
 from datetime import date, datetime, timezone
@@ -188,7 +189,9 @@ async def upload_receipt(
     os.makedirs(dest_dir, exist_ok=True)
     stored_name = f"{_uuid.uuid4()}.{ext}"
     file_path = os.path.join(dest_dir, stored_name)
-    contents = await file.read()
+    contents = await read_upload(file)
+    from app.core.file_security import validate_attachment_content
+    validate_attachment_content(file.filename, contents)
     with open(file_path, "wb") as f:
         f.write(contents)
     await file.close()
@@ -954,7 +957,7 @@ async def import_project_costs(
         raise HTTPException(403, "没有选择付款账户的权限")
     if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
         return {"code": 40001, "message": "请上传Excel文件（.xlsx 或 .xls）", "data": None}
-    content = await file.read()
+    content = await read_upload(file)
     service = ProjectCostService(db)
     try:
         result = await service.import_from_excel(

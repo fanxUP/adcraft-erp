@@ -16,6 +16,7 @@ export function applyInstallationDraft(
 ) {
   const applied: Array<keyof InstallationDraftForm> = []
   for (const field of draft.fields) {
+    if (!['assigned_to', 'address', 'scheduled_at'].includes(field.key)) continue
     if (typeof field.value !== 'string' || !field.value.trim()) continue
     if (field.key === 'scheduled_at') {
       form.scheduled_at = normalizeScheduledAt(field.value)

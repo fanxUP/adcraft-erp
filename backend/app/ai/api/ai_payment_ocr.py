@@ -1,5 +1,7 @@
 """AI Payment OCR API — extract payment info from receipt screenshots."""
 
+from app.core.file_security import read_upload
+
 import logging
 import os
 from datetime import UTC, datetime
@@ -46,7 +48,7 @@ async def recognize_payment_screenshot(
     - AI-enhanced: additionally runs OCR, returns extracted amount/payer/date/method
     """
     # 1. Save file
-    file_bytes = await file.read()
+    file_bytes = await read_upload(file)
     month_dir = _utc_month_dir()
     upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, month_dir)
     os.makedirs(upload_dir, exist_ok=True)

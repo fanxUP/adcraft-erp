@@ -50,16 +50,16 @@ class ReportService:
         month_start = today.replace(day=1)
 
         today_start = datetime(today.year, today.month, today.day)
-        today_end = datetime(today.year, today.month, today.day, 23, 59, 59)
+        today_end = today_start + timedelta(days=1)
         month_start_dt = datetime(month_start.year, month_start.month, 1)
 
         financial_data = {}
         if self.can_view_financial:
-            today_orders = await self._sum_orders(today_start, today_end)
+            today_orders = await self._sum_orders(today_start, today_end - timedelta(microseconds=1))
             month_orders = await self._sum_orders(month_start_dt, now)
 
             today_payments = await self._sum_payments(today_start, today_end)
-            month_payments = await self._sum_payments(month_start_dt, now)
+            month_payments = await self._sum_payments(month_start_dt, today_end)
 
             month_unpaid = await self._calc_month_unpaid(month_start_dt, now)
             financial_data = {
@@ -466,7 +466,7 @@ class ReportService:
     async def _sum_payments(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
-            .where(and_(Payment.is_voided == False, Payment.paid_at >= start, Payment.paid_at <= end))
+            .where(and_(Payment.is_voided == False, Payment.paid_at >= start, Payment.paid_at < end))
         )
         return result.scalar() or 0
 
