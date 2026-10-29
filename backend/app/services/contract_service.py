@@ -121,7 +121,7 @@ class ContractService:
                 Payment.is_voided.is_(False),
                 allocation_exists,
             )
-        )
+        ).subquery("legacy_contract_receipts")
         source_rows = union_all(
             allocation_rows,
             select(

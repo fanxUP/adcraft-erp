@@ -57,6 +57,79 @@ async def create_order(service, customer, **header):
         "items": [{"item_name": "灯箱", "quantity": 10, "unit_price": 100}], "groups": []})
 
 
+@pytest.mark.parametrize("contract_type", ["制作合同", "框架合同"])
+async def test_contract_list_combines_allocated_and_legacy_receipts(fixture_db, contract_type):
+    from app.models.contract import Contract, ContractDocument
+    from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
+    from app.repositories.payment_repo import PaymentRepository
+    from app.services.contract_service import ContractService
+
+    db, orders, customer = fixture_db
+    contracts = [
+        Contract(contract_no=f"TEST-CT-{index}", customer_id=customer.id,
+                 customer_name=customer.name, project_name=f"合同{index}",
+                 contract_type=contract_type, total_amount=amount, status="active")
+        for index, amount in enumerate((450, 1000, 1000))
+    ]
+    documents = [
+        BusinessDocument(doc_type="order", doc_no=f"TEST-O-{index}", customer_id=customer.id,
+                         customer_name=customer.name, project_name=f"订单{index}",
+                         order_date=date(2026, 10, 30), status="completed", total_amount=1000)
+        for index in range(2)
+    ]
+    db.add_all([*contracts, *documents])
+    await db.flush()
+    for contract, document in zip(contracts, documents):
+        if contract_type == "框架合同":
+            project = FrameworkContractProject(contract_id=contract.id, customer_id=customer.id,
+                customer_name=customer.name, project_name=document.project_name,
+                project_amount=contract.total_amount)
+            db.add(project)
+            await db.flush()
+            db.add(FrameworkContractProjectDocument(project_id=project.id, document_id=document.id))
+        else:
+            db.add(ContractDocument(contract_id=contract.id, document_id=document.id))
+
+    def receipt(no, amount, document_id=documents[0].id, **extra):
+        payment = Payment(payment_no=no, customer_id=customer.id, document_id=document_id,
+                          amount=amount, paid_at=datetime(2026, 10, 30), **extra)
+        db.add(payment)
+        return payment
+
+    receipt("TEST-LEGACY", 120)
+    allocated = receipt("TEST-ALLOCATED", 300)
+    credit = receipt("TEST-CREDIT", 50, document_id=None)
+    receipt("TEST-REFUND", -20, record_type="refund")
+    receipt("TEST-VOID-LEGACY", 900, is_voided=True)
+    voided = receipt("TEST-VOID-ALLOCATED", 800, is_voided=True)
+    receipt("TEST-OTHER", 80, document_id=documents[1].id)
+    await db.flush()
+    for payment, allocation_type in ((allocated, "order"), (credit, "contract"), (voided, "order")):
+        db.add(PaymentAllocation(payment_id=payment.id, contract_id=contracts[0].id,
+            document_id=payment.document_id, allocated_amount=payment.amount,
+            allocation_type=allocation_type))
+    await db.flush()
+
+    service = ContractService(db, viewer=orders.viewer)
+    rows, total = await service.list_contracts(page=1, page_size=20)
+    assert total == 3
+    by_id = {row["id"]: row for row in rows}
+    for contract, paid, unpaid, status in zip(
+        contracts, (450, 80, 0), (0, 920, 1000), ("completed", "active", "active"),
+    ):
+        row = by_id[str(contract.id)]
+        assert row["paid_amount"] == paid
+        assert row["unpaid_amount"] == unpaid
+        assert row["status"] == status
+        assert row["total_amount"] == float(contract.total_amount)
+        assert await service._calc_paid_amount(contract.id) == paid
+    assert await PaymentRepository(db).get_contract_paid_sums([c.id for c in contracts]) == {
+        contracts[0].id: Decimal("450"), contracts[1].id: Decimal("80"),
+    }
+    assert await service._batch_paid_amounts([contracts[1].id]) == {contracts[1].id: 80}
+    assert await service._batch_paid_amounts([]) == {}
+
+
 async def test_create_retry_and_discount_noop_edit(fixture_db):
     db, service, customer = fixture_db
     request = {"request_id": uuid4(), "order_date": date(2026, 10, 26),
