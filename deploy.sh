@@ -210,9 +210,21 @@ if [ -n "$EXPECTED_COMMIT" ]; then
   fi
 fi
 
-CURRENT_COMMIT="$(git rev-parse HEAD)"
+CURRENT_COMMIT="${DEPLOY_BASE_COMMIT:-$(git rev-parse HEAD)}"
 # 只更新 Git 跟踪的程序代码；未跟踪的 .env、uploads、backups、logs 保留不动。
 git reset --hard "$TARGET_COMMIT"
+
+# The running shell has already loaded this script before reset replaces it.
+# Restart from the target version while preserving the old diff base.
+if [ "$CURRENT_COMMIT" != "$TARGET_COMMIT" ] \
+  && [ "${DEPLOY_REEXEC_TARGET:-}" != "$TARGET_COMMIT" ]; then
+  export DEPLOY_BASE_COMMIT="$CURRENT_COMMIT"
+  export DEPLOY_REEXEC_TARGET="$TARGET_COMMIT"
+  exec "$PROJECT_DIR/deploy.sh" \
+    --project-dir "$PROJECT_DIR" \
+    --branch "$BRANCH" \
+    --commit "$TARGET_COMMIT"
+fi
 
 if [ ! -f .env ]; then
   echo "缺少 .env：请先执行 ./install-ubuntu.sh，或复制 config/env.example 后填写配置。" >&2
