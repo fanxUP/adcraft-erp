@@ -334,7 +334,7 @@ deploy_native() {
     if [ "${INSTALL_DEPENDENCIES:-0}" = "1" ]; then
       backend/.venv/bin/python -m pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements-bootstrap.txt
       backend/.venv/bin/pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements.txt
-      backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-build-isolation --no-deps -e backend
+      backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-deps -e backend
       backend/.venv/bin/pip check
     fi
     backend/.venv/bin/python -c \
