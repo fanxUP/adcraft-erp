@@ -334,9 +334,11 @@ deploy_native() {
     if [ "${INSTALL_DEPENDENCIES:-0}" = "1" ]; then
       backend/.venv/bin/python -m pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements-bootstrap.txt
       backend/.venv/bin/pip install --quiet --disable-pip-version-check --require-hashes -r backend/requirements.txt
-      backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-deps -e backend
       backend/.venv/bin/pip check
     fi
+    # The native systemd service runs entrypoint.py from backend/, so source
+    # modules are already importable without installing an editable package.
+    (cd backend && .venv/bin/python -c 'import app')
     backend/.venv/bin/python -c \
       'import alembic, asyncpg, fastapi, pydantic, sqlalchemy, uvicorn'
   fi
