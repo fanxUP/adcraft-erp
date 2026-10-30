@@ -118,7 +118,7 @@
         <el-form-item label="收款公司">
           <el-input v-model="payForm.payee_company_name" placeholder="收款公司名称（可选）" />
         </el-form-item>
-        <el-form-item label="付款日期">
+        <el-form-item label="付款日期" prop="paid_at" required>
           <el-date-picker v-model="payForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -154,6 +154,7 @@
 
 <script setup lang="ts">
 import type { FormInstance } from 'element-plus'
+import { businessToday } from '@/utils/datetime'
 import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
 import { ref, onMounted } from 'vue'
 import { computed } from 'vue'
@@ -192,9 +193,10 @@ const payDialogVisible = ref(false)
 const paySaving = ref(false)
 type PaymentTarget = Omit<OutsourceTaskPaymentSummary, 'payments'>
 const payTask = ref<PaymentTarget | null>(null)
-const payForm = ref({ amount: 0, payment_account_id: '', payment_method: 'bank_transfer', payee_company_name: '', paid_at: '', remark: '' })
+const payForm = ref({ amount: 0, payment_account_id: '', payment_method: 'bank_transfer', payee_company_name: '', paid_at: businessToday(), remark: '' })
 const payFormRef = ref<FormInstance>()
 const payRules = {
+  paid_at: [{ required: true, message: '请选择付款日期', trigger: 'change' }],
   payment_account_id: [{ required: true, message: '请选择付款账户', trigger: 'change' }], amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }] }
 
 // 付款记录对话框
@@ -240,7 +242,7 @@ async function handlePay(row: OutsourceTaskResponse) {
       amount: summary.unpaid_amount > 0 ? summary.unpaid_amount : 0,
       payment_account_id: '',
       payment_method: 'bank_transfer',
-      paid_at: '',
+      paid_at: businessToday(),
       remark: '',
       payee_company_name: '',
     }
@@ -260,7 +262,7 @@ async function handlePay(row: OutsourceTaskResponse) {
       amount: row.unpaid_amount > 0 ? row.unpaid_amount : 0,
       payment_account_id: '',
       payment_method: 'bank_transfer',
-      paid_at: '',
+      paid_at: businessToday(),
       remark: '',
       payee_company_name: '',
     }
@@ -269,6 +271,7 @@ async function handlePay(row: OutsourceTaskResponse) {
 }
 
 async function handlePaySubmit() {
+  if (paySaving.value) return
   if (!payTask.value) return
   if (!await payFormRef.value?.validate().catch(() => false)) return
   paySaving.value = true

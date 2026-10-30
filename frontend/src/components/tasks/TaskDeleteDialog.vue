@@ -19,6 +19,7 @@
           <template #title>请核对以下关联项和处理方式</template>
           <div v-for="warning in impact.warnings" :key="warning">{{ warning }}</div>
         </el-alert>
+        <el-alert v-if="!impact.allowed" :title="impact.blocked_reason || '当前任务不可删除'" type="error" :closable="false" show-icon />
         <el-table :data="impact.entries" size="small" max-height="380" class="impact-table">
           <el-table-column prop="label" label="关联项" min-width="220" />
           <el-table-column label="处理方式" min-width="140">
@@ -40,7 +41,7 @@
     <template #footer>
       <el-button :disabled="deleting" @click="emit('update:modelValue', false)">取消</el-button>
       <el-button :disabled="deleting" :loading="loading" @click="loadImpact">重新核对</el-button>
-      <el-button type="danger" :disabled="loading || !impact" :loading="deleting" @click="confirmDelete">确认删除</el-button>
+      <el-button type="danger" :disabled="loading || !impact?.allowed" :loading="deleting" @click="confirmDelete">确认删除</el-button>
     </template>
   </el-dialog>
 </template>
@@ -60,7 +61,7 @@ const loading = ref(false)
 const deleting = ref(false)
 const error = ref('')
 let requestVersion = 0
-const effects = { delete_task: '永久删除任务', recycle_acceptance: '移入回收站', unlink_outsource: '解除来源关联', reopen_task: '重新打开上一阶段' }
+const effects = { delete_task: '删除任务', recycle_acceptance: '移入回收站', unlink_outsource: '解除对应来源关联', reopen_task: '创建待处理范围', withdraw_scope: '撤销未完成明细', preserve: '保留原记录' }
 const deleteFunctions = { design: deleteDesignTask, production: deleteProductionTask, installation: deleteInstallationTask }
 
 function orderStatus(status: string | null) {
@@ -82,7 +83,7 @@ async function loadImpact() {
 }
 
 async function confirmDelete() {
-  if (!impact.value || deleting.value || loading.value) return
+  if (!impact.value?.allowed || deleting.value || loading.value) return
   deleting.value = true
   error.value = ''
   try {

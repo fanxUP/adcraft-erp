@@ -1,4 +1,4 @@
-"""Task deletion previews must describe the existing cascade and reject stale confirmation."""
+"""Scoped deletion previews preserve unrelated work and require fresh confirmation."""
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from app.api import tasks as api
 from app.models.acceptance import AcceptanceForm
 from app.models.business_document import BusinessDocument
-from app.models.outsource import OutsourceTask
+from app.models.outsource import OutsourceTask, OutsourcePayment
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.services.task_service import get_task_delete_impact, validate_task_delete_impact
@@ -22,6 +22,7 @@ NUMBERS = {"design": "design_no", "production": "production_no", "installation":
 @pytest.fixture
 def graph():
     order = SimpleNamespace(id=uuid4(), doc_type="order", doc_no="O-001", status="in_installation", updated_at=datetime(2026, 10, 27))
+    item_id = uuid4()
     tasks = {}
     links = []
     for kind in MODELS:
@@ -29,13 +30,13 @@ def graph():
                                created_at=order.updated_at, order_item_id=None, scope_status="active", attachments=[])
         setattr(task, NUMBERS[kind], f"{kind}-001")
         tasks[kind] = task
-        links.append(SimpleNamespace(id=uuid4(), task_type=kind, task_id=task.id, order_item_id=uuid4(), item_status="pending",
-                                     item_progress_pct=0, assignee_user_id=None, planned_quantity=10, completed_quantity=None, link_status="active"))
-    order.items = [SimpleNamespace(id=link.order_item_id, item_name=f"{link.task_type}明细", quantity=10,
-                                   updated_at=order.updated_at, lifecycle_status="active") for link in links]
+        links.append(SimpleNamespace(id=uuid4(), task_type=kind, task_id=task.id, order_item_id=item_id, item_status="pending",
+                                     item_progress_pct=0, assignee_user_id=None, planned_quantity=10, completed_quantity=None, item_completed_at=None, link_status="active"))
+    order.items = [SimpleNamespace(id=item_id, item_name="测试明细", quantity=10,
+                                   updated_at=order.updated_at, lifecycle_status="active")]
     acceptance = SimpleNamespace(id=uuid4(), acceptance_no="A-001", status="draft", updated_at=order.updated_at)
     external = [SimpleNamespace(id=uuid4(), task_no=f"OT-{kind}", status="pending", updated_at=order.updated_at,
-                                deleted_at=None, source_task_type=kind, source_task_id=task.id) for kind, task in tasks.items()]
+                                deleted_at=None, source_task_type=kind, source_task_id=task.id, order_item_id=item_id, paid_amount=0) for kind, task in tasks.items()]
     db = AsyncMock()
     db.get.return_value = order
     statements = []
@@ -50,6 +51,8 @@ def graph():
             rows = [link for link in links if link.task_type == params["task_type_1"] and link.task_id == params["task_id_1"]]
         elif entity == AcceptanceForm:
             rows = [acceptance]
+        elif entity == OutsourcePayment:
+            rows = []
         elif entity == OutsourceTask:
             source_ids = [value for key, value in params.items() if key.startswith("source_task_id_")]
             rows = [row for row in external if row.source_task_id in source_ids]
@@ -70,31 +73,25 @@ async def preview(graph, kind="design", **kwargs):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind,status,deleted,target,reopened", [
-    ("design", "confirmed", 1, None, 0),
-    ("design", "designing", 3, "confirmed", 0),
-    ("design", "in_installation", 3, "confirmed", 0),
-    ("production", "designing", 1, None, 0),
-    ("production", "in_production", 2, "designing", 1),
-    ("production", "in_installation", 2, "designing", 1),
-    ("installation", "in_production", 1, None, 0),
-    ("installation", "in_installation", 1, "in_production", 1),
-    ("installation", "completed", 1, None, 0),
-])
-async def test_preview_matches_conditional_cascade(graph, kind, status, deleted, target, reopened):
-    graph.order.status = status
+@pytest.mark.parametrize("kind,affected", [("design", 3), ("production", 2), ("installation", 1)])
+async def test_preview_is_scoped_and_preserves_acceptance(graph, kind, affected):
+    # Mark prior-stage records completed so rework creates a fresh scope.
+    for previous in list(MODELS)[:list(MODELS).index(kind)]:
+        link = next(link for link in graph.links if link.task_type == previous)
+        link.item_status = "confirmed" if previous == "design" else "completed"
     result = await preview(graph, kind)
     effects = [entry["effect"] for entry in result["entries"]]
-    assert effects.count("delete_task") == deleted
-    assert effects.count("unlink_outsource") == deleted
-    assert effects.count("recycle_acceptance") == bool(target)
-    assert effects.count("reopen_task") == reopened
-    assert result["target_order_status"] == target
-    assert len(result["plan_hash"]) == 64
-    assert next(entry for entry in result["entries"] if entry["id"] == str(graph.tasks[kind].id))["items"] == [f"{kind}明细"]
+    assert effects.count("withdraw_scope") == affected
+    assert effects.count("unlink_outsource") == affected
+    assert effects.count("preserve") == 1
+    assert "recycle_acceptance" not in effects and "delete_task" not in effects
+    assert effects.count("reopen_task") == (kind != "design")
+    assert result["target_order_status"] is None
+    assert len(result["plan_hash"]) == 64 and result["allowed"]
+    assert next(entry for entry in result["entries"] if entry["id"] == str(graph.tasks[kind].id))["items"] == ["测试明细"]
     graph.db.delete.assert_not_awaited()
     graph.db.flush.assert_not_awaited()
-    assert graph.order.status == status
+    assert graph.order.status == "in_installation"
 
 
 @pytest.mark.asyncio
@@ -156,12 +153,11 @@ async def test_preview_requires_permission_for_requested_task_type(graph):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["design", "production", "installation"])
-async def test_stale_confirmation_never_calls_delete_service(graph, kind):
+async def test_route_forwards_confirmation_to_atomic_service(graph, kind):
     method = getattr(api, f"delete_{kind}_task")
     service_class = {"design": "DesignTaskService", "production": "ProductionTaskService", "installation": "InstallationTaskService"}[kind]
-    with patch(f"app.api.tasks.{service_class}") as service, \
-         patch("app.api.tasks.validate_task_delete_impact", AsyncMock(side_effect=ValueError("关联数据已变化"))):
-        service.return_value.delete_task = AsyncMock()
+    with patch(f"app.api.tasks.{service_class}") as service:
+        service.return_value.delete_task = AsyncMock(side_effect=ValueError("关联数据已变化"))
         result = await method(task_id=str(graph.tasks[kind].id), plan_hash="a" * 64, db=graph.db, current_user=SimpleNamespace())
     assert result["code"] == 40001
-    service.return_value.delete_task.assert_not_awaited()
+    service.return_value.delete_task.assert_awaited_once_with(graph.tasks[kind].id, plan_hash="a" * 64)

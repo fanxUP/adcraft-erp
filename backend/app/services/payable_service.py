@@ -7,16 +7,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, literal, or_, select, union_all
+from sqlalchemy import and_, case, func, literal, or_, select, text, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.presentation import make_action_capability, make_status_view
+from app.domain.payment_dates import require_payment_date
 from app.models.business_document import BusinessDocument
 from app.models.payment import Expense
 from app.models.payable import PayablePayment
@@ -587,14 +590,7 @@ class PayableService:
 
     @staticmethod
     def _parse_paid_at(value: str | None) -> datetime:
-        if not value:
-            return _utc_now()
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return (
-            parsed.astimezone(timezone.utc).replace(tzinfo=None)
-            if parsed.tzinfo
-            else parsed
-        )
+        return require_payment_date(value)
 
     async def register_payment(
         self,
@@ -604,15 +600,39 @@ class PayableService:
         created_by: UUID | None,
     ) -> dict:
         normalized_type = _normalize_source_type(source_type)
+        paid_at = self._parse_paid_at(data.get("paid_at"))
+        try:
+            request_id = UUID(str(data.get("request_id")))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("缺少有效付款请求标识，请重新打开登记窗口") from exc
+        amount = _money(data.get("amount"))
+        method = (data.get("payment_method") or "转账支付").strip()
+        digest = hashlib.sha256(json.dumps({
+            "source_type": normalized_type, "source_id": str(source_id),
+            "created_by": str(created_by), "amount": str(amount),
+            "payment_account_id": str(data.get("payment_account_id") or ""),
+            "paid_at": paid_at.isoformat(), "payment_method": method,
+            "remark": data.get("remark") or "", "receipt_url": data.get("receipt_url") or "",
+        }, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        # Serialize retries globally before source locks, including concurrent
+        # attempts to reuse an ID against different sources.
+        await self.db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                              {"key": f"payable-request:{request_id}"})
         source = await self._load_source(normalized_type, source_id, for_update=True)
         if not source:
             raise ValueError("应付来源不存在或已删除")
+        previous = (await self.db.execute(select(PayablePayment).where(
+            PayablePayment.request_id == request_id,
+        ))).scalar_one_or_none()
+        if previous is not None:
+            if previous.request_digest != digest:
+                raise ValueError("付款请求标识已用于不同内容，请重新打开登记窗口")
+            return await self.get_payable(normalized_type, source.id)
         _, payable_total = self._source_amounts(normalized_type, source)
         payment_map = await self._payment_summary([(normalized_type, source.id)])
         paid, count = payment_map.get((normalized_type, source.id), (Decimal("0"), 0))
         paid = self._legacy_paid_amount(normalized_type, source, count, paid)
         remaining = max(Decimal("0"), payable_total - paid)
-        amount = _money(data.get("amount"))
         if amount <= 0:
             raise ValueError("付款金额必须大于0")
         if amount > remaining:
@@ -620,13 +640,15 @@ class PayableService:
 
         account_id = await CompanyAccountService(self.db).resolve(data.get("payment_account_id"))
         payment = PayablePayment(
+            request_id=request_id,
+            request_digest=digest,
             payment_account_id=account_id,
             payment_no=await generate_payable_payment_no(self.db),
             source_type=normalized_type,
             source_id=source.id,
             amount=amount,
-            payment_method=(data.get("payment_method") or "转账支付").strip(),
-            paid_at=self._parse_paid_at(data.get("paid_at")),
+            payment_method=method,
+            paid_at=paid_at,
             remark=data.get("remark"),
             receipt_url=data.get("receipt_url"),
             created_by=created_by,

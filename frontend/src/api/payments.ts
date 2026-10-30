@@ -251,10 +251,11 @@ export function createPayablePayment(
   sourceType: string,
   sourceId: string,
   data: {
+    request_id: string
     amount: number
     payment_account_id: string
     payment_method: string
-    paid_at?: string
+    paid_at: string
     remark?: string
     receipt_url?: string
   },
@@ -359,6 +360,6 @@ export function getCostDebts(params?: { page?: number; page_size?: number; keywo
   return get<PaginatedData<DebtResponse>>('/project-costs/debts/list', { params })
 }
 
-export function settleCostDebt(costId: string, data: { settle_amount: number; payment_account_id: string; payment_method: string; remark?: string }) {
+export function settleCostDebt(costId: string, data: { request_id: string; paid_at: string; settle_amount: number; payment_account_id: string; payment_method: string; remark?: string }) {
   return post<ProjectCostResponse>(`/project-costs/${costId}/settle-debt`, data)
 }

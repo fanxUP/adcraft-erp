@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, insert, or_, select, text, update
+from sqlalchemy import insert, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.workflows import (
@@ -178,7 +178,7 @@ TASK_ORDER_REVIEW_FIELD_LABELS = {
 
 def task_order_review_required(task) -> bool:
     """Return whether a task has an outstanding order-edit review."""
-    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) == "empty_after_item_delete":
+    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) in ("empty_after_item_delete", "withdrawn"):
         return False
     reason = getattr(task, "scope_closed_reason", None)
     return isinstance(reason, str) and reason.startswith(TASK_ORDER_REVIEW_PREFIX)
@@ -264,7 +264,7 @@ async def mark_tasks_for_order_review(
             model.document_id == document_id,
             model.status != TASK_CANCELLED_STATUS,
             or_(
-                model.scope_status != "empty_after_item_delete",
+                model.scope_status.not_in(("empty_after_item_delete", "withdrawn")),
                 model.scope_status.is_(None),
             ),
         ]
@@ -879,7 +879,7 @@ async def _validate_historical_order_item_ids(
         raise ValueError("仅可为已结束的历史任务补录订单明细")
     if _task_order_item_id(task) is not None:
         raise ValueError("当前任务已有旧版订单明细关联，不能使用历史补录入口")
-    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) == "empty_after_item_delete":
+    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) in ("empty_after_item_delete", "withdrawn"):
         raise ValueError("当前任务已因订单明细删除而关闭，不能补录明细")
     if await _linked_order_item_ids(db, task_type, task.id):
         raise ValueError("当前任务已经关联订单明细，请刷新后再操作")
@@ -1239,7 +1239,7 @@ def _select_reusable_stage_task(
             candidate
             for candidate in tasks
             if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
-            != "empty_after_item_delete"
+            not in ("empty_after_item_delete", "withdrawn")
             and not _is_terminal_task_status(task_type, candidate)
         ),
         None,
@@ -1252,7 +1252,7 @@ def _select_reusable_stage_task(
             candidate
             for candidate in tasks
             if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
-            != "empty_after_item_delete"
+            not in ("empty_after_item_delete", "withdrawn")
             if _task_order_item_id(candidate) is None
             and _is_terminal_task_status(task_type, candidate)
         ),
@@ -1298,6 +1298,7 @@ async def _select_stage_entry_target(
                     db,
                     task_type,
                     candidate_id,
+                    include_removed=True,
                 )
                 if _coerce_uuid(getattr(link, "order_item_id", None))
                 == current_item_id
@@ -1305,6 +1306,11 @@ async def _select_stage_entry_target(
             None,
         )
         if candidate_link is None:
+            continue
+        if not _task_link_is_active(candidate_link):
+            # Task withdrawal freezes this execution snapshot. Re-entry
+            # creates a fresh work unit rather than reviving the removed row.
+            blocked_task_ids.add(candidate_id)
             continue
         link_status = getattr(candidate_link, "item_status", None)
         if link_status == TASK_ROLLED_BACK_STATUS:
@@ -1321,7 +1327,7 @@ async def _select_stage_entry_target(
         candidate
         for candidate in existing_tasks
         if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
-        != "empty_after_item_delete"
+        not in ("empty_after_item_delete", "withdrawn")
         if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
     ]
     target, reused_terminal_task = _select_reusable_stage_task(
@@ -1780,7 +1786,7 @@ async def _task_stage_states_by_item(
             task
             for task in result.scalars().all()
             if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
-            != "empty_after_item_delete"
+            not in ("empty_after_item_delete", "withdrawn")
         ]
         item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
         link_state_by_item: dict[tuple[UUID, UUID], str] = {}
@@ -2120,7 +2126,7 @@ async def get_task_order_item_options(
         in TASK_HISTORICAL_BACKFILL_STATUSES.get(task_type, set())
         and _task_order_item_id(task) is None
         and getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
-        != "empty_after_item_delete"
+        not in ("empty_after_item_delete", "withdrawn")
         and not await _linked_order_item_ids(db, task_type, task.id)
     )
     options = await _task_order_item_option_map(
@@ -2373,21 +2379,6 @@ async def _sync_task_order_item_links(
     else:
         task.completed_at = None
     await db.flush()
-
-
-async def _clear_task_order_item_links(
-    db: AsyncSession,
-    task_type: str,
-    task_ids: list[UUID],
-) -> None:
-    if not task_ids:
-        return
-    await db.execute(
-        delete(TaskOrderItemLink).where(
-            TaskOrderItemLink.task_type == task_type,
-            TaskOrderItemLink.task_id.in_(task_ids),
-        )
-    )
 
 
 def _attachment_to_dict(att) -> dict:
@@ -2673,159 +2664,222 @@ async def _attach_outsource_flags(
     return task_dicts
 
 
-async def get_task_delete_impact(
-    db: AsyncSession,
-    task_type: str,
-    task_id: UUID,
-    viewer: User | None,
-    *,
-    lock: bool = False,
-) -> dict:
-    """Describe the existing conditional cascade without changing any records.
-
-    Delete requests re-read this snapshot under the order lock. No financial
-    values or unrelated customer data are included in the preview.
-    """
+async def _task_delete_plan(db, task_type, task_id, viewer, *, lock=False):
+    """One scoped plan drives both the confirmation and its atomic execution."""
     from app.models.acceptance import AcceptanceForm
-    from app.models.outsource import OutsourceTask
+    from app.models.outsource import OutsourceTask, OutsourcePayment
     from app.schemas.task import TaskDeleteImpact
-
     models = {"design": DesignTask, "production": ProductionTask, "installation": InstallationTask}
     numbers = {"design": "design_no", "production": "production_no", "installation": "installation_no"}
     if task_type not in models:
         raise ValueError("任务类型无效")
-    task = await get_visible_task(db, models[task_type], task_id, viewer)
-    if task is None:
+    visible = await get_visible_task(db, models[task_type], task_id, viewer)
+    if visible is None:
         raise ValueError("任务不存在或没有访问权限")
-    order = await db.get(
-        BusinessDocument, task.document_id,
-        with_for_update=lock, populate_existing=lock,
-    ) if task.document_id else None
-    status = order.status if order and order.doc_type == "order" else None
-    downstream: list[str] = []
-    target_status = None
-    if task_type == "design" and status in ACTIVE_ORDER_STATUSES:
-        downstream, target_status = ["production", "installation"], "confirmed"
-    elif task_type == "production" and status in ("in_production", "in_installation"):
-        downstream, target_status = ["installation"], "designing"
-    elif task_type == "installation" and status == "in_installation":
-        target_status = "in_production"
-
-    def locked(statement):
-        return statement.with_for_update().execution_options(populate_existing=True) if lock else statement
-
-    # Include the current task even when the order does not trigger a rollback.
-    current_result = await db.execute(locked(select(models[task_type]).where(models[task_type].id == task_id)))
-    current = current_result.scalar_one_or_none()
-    if current is None:
-        raise ValueError("任务不存在或已被删除")
-    targets = [(task_type, current)]
-    for kind in downstream:
-        result = await db.execute(locked(select(models[kind]).where(models[kind].document_id == task.document_id)))
-        targets.extend((kind, row) for row in result.scalars().all())
-    targets.sort(key=lambda pair: (list(models).index(pair[0]), str(pair[1].id)))
-    entries, snapshot = [], []
-    item_names = {item.id: item.item_name for item in (getattr(order, "items", []) or [])}
-    for kind, row in targets:
-        visible = viewer is None or kind == task_type or user_has_permission(viewer, f"{kind}_task:read")
-        label = f"{TASK_TYPE_LABELS[kind]}任务 {getattr(row, numbers[kind])}" if visible else f"{TASK_TYPE_LABELS[kind]}任务（无详情查看权限）"
-        entries.append({"id": str(row.id), "label": label, "effect": "delete_task"})
-        snapshot.append([kind, str(row.id), str(row.updated_at), row.status])
-        links = await db.execute(locked(select(TaskOrderItemLink).where(
-            TaskOrderItemLink.task_type == kind, TaskOrderItemLink.task_id == row.id,
-        )))
-        link_rows = sorted(links.scalars().all(), key=lambda link: str(link.id))
-        snapshot.extend(["link", str(link.id), str(link.order_item_id), link.item_status,
-                         link.item_progress_pct, str(link.assignee_user_id), str(link.planned_quantity),
-                         str(link.completed_quantity), link.link_status] for link in link_rows)
-        scoped_item_ids = {link.order_item_id for link in link_rows}
-        if row.order_item_id is not None:
-            scoped_item_ids.add(row.order_item_id)
-        entries[-1]["items"] = [item_names.get(item_id, f"历史明细 {item_id}") for item_id in sorted(scoped_item_ids, key=str)] if visible else []
-        attachments = list(row.attachments or [])
-        entries[-1]["detail"] = f"清除 {len(link_rows)} 条任务明细关联、{len(attachments)} 个任务附件"
-        snapshot.extend(["attachment", str(attachment.id), str(attachment.updated_at)] for attachment in sorted(attachments, key=lambda attachment: str(attachment.id)))
-
-    if target_status and task_type in ("production", "installation"):
-        previous_kind = "design" if task_type == "production" else "production"
-        model = models[previous_kind]
-        result = await db.execute(locked(select(model).where(
-            model.document_id == task.document_id, model.status != "cancelled",
-            or_(model.scope_status == "active", model.scope_status.is_(None)),
-        ).order_by(model.created_at.asc(), model.id.asc())))
-        candidates = list(result.scalars().all())
-        previous, _ = _select_reusable_stage_task(candidates, previous_kind)
-        snapshot.extend(["previous", str(row.id), row.status, str(row.updated_at)] for row in candidates)
-        for candidate in candidates:
-            link_result = await db.execute(locked(select(TaskOrderItemLink).where(
-                TaskOrderItemLink.task_type == previous_kind, TaskOrderItemLink.task_id == candidate.id,
-            )))
-            snapshot.extend(["previous-link", str(link.id), str(link.order_item_id), link.item_status,
-                             link.item_progress_pct, str(link.assignee_user_id), link.link_status]
-                            for link in sorted(link_result.scalars().all(), key=lambda link: str(link.id)))
-        label = f"{TASK_TYPE_LABELS[previous_kind]}任务（自动创建）"
-        if previous is not None:
-            label = f"{TASK_TYPE_LABELS[previous_kind]}任务 {getattr(previous, numbers[previous_kind])}" if viewer is None or user_has_permission(viewer, f"{previous_kind}_task:read") else f"{TASK_TYPE_LABELS[previous_kind]}任务（无详情查看权限）"
-        entries.append({"id": str(previous.id) if previous is not None else f"new-{previous_kind}", "label": label,
-                        "effect": "reopen_task", "detail": "按整单回退规则恢复上一阶段的待处理明细"})
-
-    if target_status:
-        result = await db.execute(locked(select(AcceptanceForm).where(
-            AcceptanceForm.document_id == task.document_id, AcceptanceForm.deleted_at.is_(None),
-        )))
-        for form in sorted(result.scalars().all(), key=lambda row: str(row.id)):
-            visible = viewer is None or user_has_permission(viewer, "acceptance:read")
-            entries.append({"id": str(form.id), "label": f"验收单 {form.acceptance_no}" if visible else "验收单（无详情查看权限）", "effect": "recycle_acceptance"})
-            snapshot.append(["acceptance", str(form.id), form.status, str(form.updated_at)])
-
-    clauses = [((OutsourceTask.source_task_type == kind) & (OutsourceTask.source_task_id == row.id)) for kind, row in targets]
-    result = await db.execute(locked(select(OutsourceTask).where(or_(*clauses))))
-    for external in sorted(result.scalars().all(), key=lambda row: str(row.id)):
-        visible = viewer is None or can_view_outsource_tasks(viewer)
-        entries.append({"id": str(external.id), "label": f"外协任务 {external.task_no}" if visible else "外协任务（无详情查看权限）", "effect": "unlink_outsource"})
-        snapshot.append(["outsource", str(external.id), external.status, str(external.updated_at), str(external.deleted_at)])
-
-    payload = {
-        "task_id": str(task_id), "task_type": task_type,
-        "task_no": getattr(current, numbers[task_type]),
-        "order_no": order.doc_no if order else None,
-        "order_status": status, "target_order_status": target_status,
-        "entries": entries,
-        "warnings": ["删除任务及其明细关联后不可恢复。", "外协任务仅解除来源关联，其任务和财务记录保留。"],
-    }
-    if downstream:
-        payload["warnings"].append("本次沿用整单回退规则，会清除列表中的下游任务，可能涉及其他明细。")
-    if task_type in ("production", "installation") and target_status:
-        payload["warnings"].append("上一阶段的任务及明细将重新打开，供重新处理。")
+    order = await db.get(BusinessDocument, visible.document_id,
+                         with_for_update=lock, populate_existing=lock)
+    def locked(query):
+        return query.with_for_update().execution_options(populate_existing=True) if lock else query
+    all_tasks, all_links = {}, {}
+    snapshot = []
+    def quantity(value):
+        return str(Decimal(str(value)).normalize()) if value is not None else None
+    for kind, model in models.items():
+        rows = list((await db.execute(locked(select(model).where(
+            model.document_id == visible.document_id).order_by(model.id)))).scalars().all())
+        for row in rows:
+            all_tasks[kind, row.id] = row
+            links = list((await db.execute(locked(select(TaskOrderItemLink).where(
+                TaskOrderItemLink.task_type == kind, TaskOrderItemLink.task_id == row.id,
+            ).order_by(TaskOrderItemLink.id)))).scalars().all())
+            all_links[kind, row.id] = links
+            snapshot.append([kind, str(row.id), row.status, str(row.updated_at), row.scope_status, str(row.order_item_id)])
+            snapshot.extend(["link", str(link.id), str(link.order_item_id), link.item_status,
+                link.item_progress_pct, str(link.assignee_user_id), quantity(link.planned_quantity),
+                quantity(link.completed_quantity), link.link_status, str(link.item_completed_at)] for link in links)
+            snapshot.extend(["attachment", str(a.id), str(a.updated_at)] for a in sorted(row.attachments or [], key=lambda row: str(row.id)))
+    current = all_tasks.get((task_type, task_id))
+    if current is None or current.scope_status == "withdrawn":
+        raise ValueError("任务不存在或已撤销")
+    active_items = {item.id for item in (order.items if order else []) if item.lifecycle_status == "active"}
+    def states(kind, row):
+        result = {link.order_item_id: link.item_status or row.status
+                  for link in all_links[kind, row.id] if _task_link_is_active(link) and link.order_item_id in active_items}
+        if row.order_item_id in active_items and not any(link.order_item_id == row.order_item_id for link in all_links[kind, row.id]):
+            result[row.order_item_id] = row.status
+        return result
+    current_states = states(task_type, current)
+    scope = {item_id for item_id, status in current_states.items()
+             if not _is_completed_item_status(task_type, status)}
+    blocked = None
+    if (current_states and not scope) or (not current_states and _is_completed_item_status(task_type, current.status)):
+        blocked = "已完成任务及明细保留执行事实，请通过返工或补做处理"
+    names = {item.id: item.item_name for item in (order.items if order else [])}
+    entries, changes = [], []
+    ranks = list(models)
+    for (kind, row_id), row in all_tasks.items():
+        if row.scope_status in ("empty_after_item_delete", "withdrawn"):
+            continue
+        if ranks.index(kind) < ranks.index(task_type) or (kind == task_type and row_id != task_id):
+            continue
+        row_states = states(kind, row)
+        affected = scope & {item_id for item_id, status in row_states.items()
+                            if not _is_completed_item_status(kind, status)}
+        if row_id != task_id and not affected:
+            continue
+        can_read = viewer is None or kind == task_type or user_has_permission(viewer, f"{kind}_task:read")
+        label = f"{TASK_TYPE_LABELS[kind]}任务 {getattr(row, numbers[kind])}" if can_read else f"{TASK_TYPE_LABELS[kind]}任务（无详情查看权限）"
+        remaining = set(row_states) - affected
+        entries.append({"id": str(row.id), "label": label, "effect": "withdraw_scope",
+            "detail": "仅撤销未完成明细；执行记录和附件保留" + ("，其他明细继续保留" if remaining else "，空任务退出当前列表"),
+            "items": [names.get(item_id, str(item_id)) for item_id in sorted(affected, key=str)] if can_read else []})
+        if viewer is not None and not user_has_permission(viewer, f"{kind}_task:delete"):
+            blocked = "没有全部受影响阶段的任务删除权限"
+        changes.append((kind, row, affected, remaining))
+    target_kind = {"production": "design", "installation": "production"}.get(task_type)
+    removed_by_task = {(kind, row.id): affected for kind, row, affected, _ in changes}
+    if task_type == "design" and any(
+        _is_effective_item_status(status)
+        for (kind, row_id), row in all_tasks.items()
+        if row.scope_status not in ("empty_after_item_delete", "withdrawn")
+        for item_id, status in states(kind, row).items()
+        if item_id not in removed_by_task.get((kind, row_id), set())
+    ):
+        # A sibling may keep the parent at installation/completed. Without a
+        # fresh design scope the legacy order-stage fallback would incorrectly
+        # advance the withdrawn item to that sibling's stage.
+        target_kind = "design"
+    reopen = set()
+    if target_kind:
+        already_open = {item_id for (kind, _), row in all_tasks.items() if kind == target_kind
+                        and row.scope_status not in ("empty_after_item_delete", "withdrawn")
+                        for item_id, status in states(kind, row).items()
+                        if item_id not in removed_by_task.get((kind, row.id), set())
+                        and _is_effective_item_status(status) and not _is_completed_item_status(kind, status)}
+        reopen = scope - already_open
+        if reopen:
+            entries.append({"id": f"new-{target_kind}", "label": f"{TASK_TYPE_LABELS[target_kind]}补做任务",
+                "effect": "reopen_task", "detail": "新建这些明细的待处理范围，原已完成记录保持不变",
+                "items": [names.get(item_id, str(item_id)) for item_id in sorted(reopen, key=str)]})
+            if viewer is not None and not user_has_permission(viewer, f"{target_kind}_task:create"):
+                blocked = "没有待处理范围对应阶段的任务创建权限"
+    forms = list((await db.execute(locked(select(AcceptanceForm).where(
+        AcceptanceForm.document_id == current.document_id, AcceptanceForm.deleted_at.is_(None),
+    ).order_by(AcceptanceForm.id)))).scalars().all())
+    for form in forms:
+        readable = viewer is None or user_has_permission(viewer, "acceptance:read")
+        entries.append({"id": str(form.id), "label": f"验收单 {form.acceptance_no}" if readable else "验收单（无详情查看权限）",
+                        "effect": "preserve", "detail": "保留验收内容和状态"})
+        snapshot.append(["acceptance", str(form.id), form.status, str(form.updated_at)])
+    externals = []
+    clauses = [(OutsourceTask.source_task_type == kind) & (OutsourceTask.source_task_id == row.id)
+               for kind, row, _, _ in changes]
+    if clauses:
+        rows = list((await db.execute(locked(select(OutsourceTask).where(or_(*clauses)).order_by(OutsourceTask.id)))).scalars().all())
+        for external in rows:
+            affected, remaining = next((affected, remaining) for kind, row, affected, remaining in changes
+                                      if kind == external.source_task_type and row.id == external.source_task_id)
+            if external.order_item_id not in affected and (remaining or external.order_item_id is not None):
+                continue
+            externals.append(external)
+            can_read = viewer is None or can_view_outsource_tasks(viewer)
+            entries.append({"id": str(external.id), "label": f"外协任务 {external.task_no}" if can_read else "外协任务（无详情查看权限）",
+                            "effect": "unlink_outsource", "detail": "仅解除对应来源，保留外协任务和财务记录"})
+            snapshot.append(["outsource", str(external.id), external.status, str(external.updated_at), str(external.deleted_at), quantity(external.paid_amount)])
+            payments = list((await db.execute(locked(select(OutsourcePayment).where(OutsourcePayment.task_id == external.id)
+                                                     .order_by(OutsourcePayment.id)))).scalars().all())
+            snapshot.extend(["payment", str(row.id), quantity(row.amount), str(row.paid_at), str(row.updated_at)] for row in payments)
+    payload = {"task_id": str(task_id), "task_type": task_type, "task_no": getattr(current, numbers[task_type]),
+               "order_no": order.doc_no if order else None, "order_status": order.status if order else None,
+               "target_order_status": None, "entries": entries, "allowed": blocked is None, "blocked_reason": blocked,
+               "warnings": ["仅处理当前任务涉及的未完成明细，其他明细进度保持不变。",
+                            "已完成执行、验收单、附件及财务记录保留；上一阶段需要重做时创建新的待处理范围。"]}
     item_snapshot = [[str(item.id), item.lifecycle_status, str(item.quantity), str(item.updated_at)]
-                     for item in sorted(getattr(order, "items", []) or [], key=lambda item: str(item.id))]
-    fingerprint = {"payload": payload, "records": snapshot, "items": item_snapshot,
-                   "order_updated_at": str(order.updated_at) if order else None}
-    payload["plan_hash"] = hashlib.sha256(json.dumps(fingerprint, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-    return TaskDeleteImpact.model_validate(payload).model_dump()
+                     for item in sorted(order.items if order else [], key=lambda item: str(item.id))]
+    payload["plan_hash"] = hashlib.sha256(json.dumps({"payload": payload, "records": snapshot,
+        "items": item_snapshot, "order_updated_at": str(order.updated_at) if order else None},
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return TaskDeleteImpact.model_validate(payload).model_dump(), changes, externals, target_kind, reopen
 
 
-async def validate_task_delete_impact(db, task_type, task_id, viewer, plan_hash: str) -> None:
+async def get_task_delete_impact(db, task_type, task_id, viewer, *, lock=False) -> dict:
+    return (await _task_delete_plan(db, task_type, task_id, viewer, lock=lock))[0]
+
+
+async def validate_task_delete_impact(db, task_type, task_id, viewer, plan_hash) -> None:
+    if not isinstance(plan_hash, str) or len(plan_hash) != 64:
+        raise ValueError("请先查看删除影响并确认")
     current = await get_task_delete_impact(db, task_type, task_id, viewer, lock=True)
     if current["plan_hash"] != plan_hash:
         raise ValueError("关联数据已变化，请重新查看删除影响并确认")
+    if not current["allowed"]:
+        raise ValueError(current["blocked_reason"])
 
 
-async def _clear_outsource_source_refs(db: AsyncSession, task_type: str, task_ids: list[UUID]) -> None:
-    """删除任务后清空外协任务对来源任务的悬空引用（source_task_id 无外键）。"""
-    if not task_ids:
-        return
-    from sqlalchemy import update as sa_update
-
-    from app.models.outsource import OutsourceTask
-    await db.execute(
-        sa_update(OutsourceTask)
-        .where(
-            OutsourceTask.source_task_type == task_type,
-            OutsourceTask.source_task_id.in_(task_ids),
-        )
-        .values(source_task_type=None, source_task_id=None)
-    )
+async def _delete_task_scope(db, task_type, task_id, viewer, plan_hash):
+    if not isinstance(plan_hash, str) or len(plan_hash) != 64:
+        raise ValueError("请先查看删除影响并确认")
+    impact, changes, externals, target_kind, reopen = await _task_delete_plan(db, task_type, task_id, viewer, lock=True)
+    if impact["plan_hash"] != plan_hash:
+        raise ValueError("关联数据已变化，请重新查看删除影响并确认")
+    if not impact["allowed"]:
+        raise ValueError(impact["blocked_reason"])
+    operator = getattr(viewer, "id", None)
+    now = _utc_now()
+    for kind, task, affected, remaining in changes:
+        before = task_history_snapshot(task)
+        # Materialize a legacy single-item scope so its execution snapshot is
+        # retained even when the old scalar reference leaves current work.
+        if task.order_item_id in affected:
+            await _ensure_task_order_item_links(db, kind, task, [task.order_item_id])
+            task.order_item_id = None
+        for link in await _task_order_item_link_rows(db, kind, task.id):
+            if link.order_item_id in affected:
+                link.link_status = REMOVED_TASK_LINK_STATUS
+                link.removed_at, link.removed_by = now, operator
+                link.removed_reason = "删除任务：撤销未完成明细范围，保留执行快照"
+        if remaining:
+            await db.flush()
+            await _refresh_task_aggregate(db, kind, task)
+        else:
+            task.scope_status = "withdrawn"
+            task.scope_closed_at = now
+            task.scope_closed_reason = "删除任务：当前未完成范围已撤销，历史执行和附件保留"
+            task.status = "cancelled"
+        await record_task_event(db, kind, task, ACTION_UPDATE, operator, before=before,
+                                reason="按明细撤销任务；保留已完成执行、验收及财务事实",
+                                changed_fields=["status", "order_item_ids"])
+    for external in externals:
+        external.source_task_type = external.source_task_id = None
+    if reopen:
+        source = next(row for kind, row, _, _ in changes if kind == task_type and row.id == task_id)
+        order = await db.get(BusinessDocument, source.document_id)
+        model = DesignTask if target_kind == "design" else ProductionTask
+        number_field = "design_no" if target_kind == "design" else "production_no"
+        generator = generate_design_no if target_kind == "design" else generate_production_no
+        target = model(**{number_field: await generator(db)}, document_id=source.document_id,
+                       customer_id=order.customer_id, project_name=order.project_name, status="pending")
+        db.add(target)
+        await db.flush()
+        await _ensure_task_order_item_links(db, target_kind, target, sorted(reopen, key=str))
+        await record_task_event(db, target_kind, target, ACTION_CREATE, operator,
+                                reason="撤销未完成任务范围，创建对应明细的待处理任务")
+    await db.flush()
+    if changes:
+        doc_id = changes[0][1].document_id
+        await _reconcile_order_stage_after_item_rollback(db, doc_id, operator)
+        # With no remaining work at any stage, design may be started again
+        # from confirmed. Never rewind a sibling's completed delivery.
+        order = await db.get(BusinessDocument, doc_id)
+        states, global_states = await _task_stage_states_by_item(db, doc_id)
+        if task_type == "design" and order and order.status in ACTIVE_ORDER_STATUSES and not any(
+            _is_effective_item_status(status) for item in states.values() for values in item.values() for status in values
+        ) and not any(_is_effective_item_status(status) for values in global_states.values() for status in values):
+            old_status, order.status = order.status, "confirmed"
+            from app.services.business_document_service import BusinessDocumentService
+            await BusinessDocumentService(db, doc_type="order").repo.create_status_log(doc_id, old_status, order.status,
+                "设计任务未完成范围已撤销，订单可重新开始设计", operator)
+    await db.flush()
 
 
 async def _all_stage_tasks_completed(
@@ -2847,7 +2901,7 @@ async def _all_stage_tasks_completed(
         task
         for task in task_result.scalars().all()
         if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
-        != "empty_after_item_delete"
+        not in ("empty_after_item_delete", "withdrawn")
     ]
     task_type = _task_type_for_model(model)
     raw_item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
@@ -2957,7 +3011,7 @@ async def _item_stage_tasks_completed(
         task
         for task in result.scalars().all()
         if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
-        != "empty_after_item_delete"
+        not in ("empty_after_item_delete", "withdrawn")
     ]
     task_type = _task_type_for_model(model)
     raw_item_ids_by_task = await _task_item_ids_by_task(
@@ -3404,7 +3458,7 @@ async def _get_or_create_rollback_target_task(
                 candidate for candidate in target_tasks
                 if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
                 and getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
-                != "empty_after_item_delete"
+                not in ("empty_after_item_delete", "withdrawn")
                 and _task_order_item_id(candidate) is None
                 and not _is_terminal_task_status(target_type, candidate)
             ),
@@ -3416,7 +3470,7 @@ async def _get_or_create_rollback_target_task(
                 candidate for candidate in target_tasks
                 if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
                 and getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
-                != "empty_after_item_delete"
+                not in ("empty_after_item_delete", "withdrawn")
                 and _task_order_item_id(candidate) is None
                 and getattr(candidate, "status", None) == TASK_ROLLED_BACK_STATUS
             ),
@@ -4405,73 +4459,9 @@ class DesignTaskService:
         except Exception:
             raise
 
-    async def delete_task(self, task_id: UUID) -> None:
-        """管理员删除设计任务，回退订单到确认状态。"""
-        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
-        if not task:
-            raise ValueError("设计任务不存在")
+    async def delete_task(self, task_id: UUID, plan_hash: str | None = None) -> None:
+        await _delete_task_scope(self.db, "design", task_id, self.viewer, plan_hash)
 
-        doc_id = task.document_id
-        design_ids = [task_id]
-        prod_ids: list[UUID] = []
-        inst_ids: list[UUID] = []
-        await _clear_task_order_item_links(self.db, "design", design_ids)
-        # Hard delete the task
-        await self.db.delete(task)
-
-        # Revert order to confirmed (pre-design state)
-        if doc_id:
-            from app.models.business_document import BusinessDocument
-            from app.models.task import InstallationTask, ProductionTask
-            from app.services.business_document_service import BusinessDocumentService
-
-            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
-            if order and order.doc_type == "order" and order.status in ("designing", "in_production", "in_installation"):
-                # Cancel downstream auto-created tasks
-                for model_cls in (ProductionTask, InstallationTask):
-                    result = await self.db.execute(
-                        select(model_cls).where(model_cls.document_id == doc_id)
-                    )
-                    for t in result.scalars().all():
-                        if model_cls is ProductionTask:
-                            prod_ids.append(t.id)
-                        else:
-                            inst_ids.append(t.id)
-                        await _clear_task_order_item_links(
-                            self.db,
-                            "production" if model_cls is ProductionTask else "installation",
-                            [t.id],
-                        )
-                        await self.db.delete(t)
-
-                # Soft-delete acceptance if exists
-                from app.models.acceptance import AcceptanceForm
-                ac_result = await self.db.execute(
-                    select(AcceptanceForm).where(
-                        AcceptanceForm.document_id == doc_id,
-                        AcceptanceForm.deleted_at.is_(None),
-                    )
-                )
-                for form in ac_result.scalars().all():
-                    form.deleted_at = _utc_now()
-
-                # Revert order
-                old_status = order.status
-                order.status = "confirmed"
-                order_svc = BusinessDocumentService(self.db, doc_type="order")
-                await order_svc.repo.create_status_log(
-                    doc_id,
-                    old_status,
-                    "confirmed",
-                    "设计任务已被删除，订单回退到设计前一级（已确认）",
-                    None,
-                )
-
-        # 清空外协任务对已删任务的悬空来源引用
-        await _clear_outsource_source_refs(self.db, "design", design_ids)
-        await _clear_outsource_source_refs(self.db, "production", prod_ids)
-        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await self.db.flush()
 
 class ProductionTaskService:
     def __init__(self, db: AsyncSession, viewer: User | None = None):
@@ -4837,64 +4827,9 @@ class ProductionTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def delete_task(self, task_id: UUID) -> None:
-        """管理员删除制作任务，回退订单到设计中状态。"""
-        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
-        if not task:
-            raise ValueError("制作任务不存在")
+    async def delete_task(self, task_id: UUID, plan_hash: str | None = None) -> None:
+        await _delete_task_scope(self.db, "production", task_id, self.viewer, plan_hash)
 
-        doc_id = task.document_id
-        prod_ids = [task_id]
-        inst_ids: list[UUID] = []
-        await _clear_task_order_item_links(self.db, "production", prod_ids)
-        await self.db.delete(task)
-
-        if doc_id:
-            from app.models.business_document import BusinessDocument
-            from app.models.task import InstallationTask
-            from app.services.business_document_service import BusinessDocumentService
-
-            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
-            if order and order.doc_type == "order" and order.status in ("in_production", "in_installation"):
-                # Cancel downstream installation task
-                result = await self.db.execute(
-                    select(InstallationTask).where(InstallationTask.document_id == doc_id)
-                )
-                for t in result.scalars().all():
-                    inst_ids.append(t.id)
-                    await _clear_task_order_item_links(
-                        self.db,
-                        "installation",
-                        [t.id],
-                    )
-                    await self.db.delete(t)
-
-                # Soft-delete acceptance if exists
-                from app.models.acceptance import AcceptanceForm
-                ac_result = await self.db.execute(
-                    select(AcceptanceForm).where(
-                        AcceptanceForm.document_id == doc_id,
-                        AcceptanceForm.deleted_at.is_(None),
-                    )
-                )
-                for form in ac_result.scalars().all():
-                    form.deleted_at = _utc_now()
-
-                old_status = order.status
-                order_svc = BusinessDocumentService(self.db, doc_type="order")
-                # 回退到设计中；已完成的历史设计卡片也要重新打开，保证看板设计栏有任务可处理。
-                await order_svc._auto_create_design_task(
-                    order,
-                    reopen_terminal=True,
-                )
-                order.status = "designing"
-                await order_svc.repo.create_status_log(doc_id, old_status, "designing",
-                    "制作任务已被管理员删除，系统自动回退", None)
-
-        # 清空外协任务对已删任务的悬空来源引用
-        await _clear_outsource_source_refs(self.db, "production", prod_ids)
-        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await self.db.flush()
 
 class InstallationTaskService:
     def __init__(self, db: AsyncSession, viewer: User | None = None):
@@ -5235,55 +5170,9 @@ class InstallationTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def delete_task(self, task_id: UUID) -> None:
-        """管理员删除安装任务，回退订单到生产中状态。"""
-        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
-        if not task:
-            raise ValueError("安装任务不存在")
+    async def delete_task(self, task_id: UUID, plan_hash: str | None = None) -> None:
+        await _delete_task_scope(self.db, "installation", task_id, self.viewer, plan_hash)
 
-        doc_id = task.document_id
-        inst_ids = [task_id]
-        await _clear_task_order_item_links(self.db, "installation", inst_ids)
-        await self.db.delete(task)
-        # Make the deletion visible before rebuilding the previous stage. A
-        # blank successor created by reopening a completed order is not work
-        # itself; removing it must still leave the order in production.
-        await self.db.flush()
-
-        if doc_id:
-            from app.models.business_document import BusinessDocument
-            from app.services.business_document_service import BusinessDocumentService
-
-            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
-            if order and order.doc_type == "order" and order.status == "in_installation":
-                # Soft-delete acceptance if exists. Deleting a task is a
-                # rollback operation; it must never be interpreted as proof
-                # that the order is complete, even when historical tasks are
-                # all terminal.
-                from app.models.acceptance import AcceptanceForm
-                ac_result = await self.db.execute(
-                    select(AcceptanceForm).where(
-                        AcceptanceForm.document_id == doc_id,
-                        AcceptanceForm.deleted_at.is_(None),
-                    )
-                )
-                for form in ac_result.scalars().all():
-                    form.deleted_at = _utc_now()
-
-                old_status = order.status
-                order_svc = BusinessDocumentService(self.db, doc_type="order")
-                # 回退到制作中，并重新打开历史制作明细，保证制作看板有任务可处理。
-                await order_svc._auto_create_production_task(
-                    order,
-                    reopen_terminal=True,
-                )
-                order.status = "in_production"
-                await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
-                    "安装任务已被管理员删除，系统自动回退", None)
-
-        # 清空外协任务对已删任务的悬空来源引用
-        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await self.db.flush()
 
 class AttachmentService:
     def __init__(self, db: AsyncSession):

@@ -209,8 +209,8 @@ async def test_order_restore_reconciles_completed_delivery_chain(service):
 
 
 @pytest.mark.asyncio
-async def test_deleting_blank_installation_task_reopens_production_order():
-    """删除安装任务是回退操作，不能把订单误判为已完成。"""
+async def test_deleting_blank_installation_task_requires_preview():
+    """缺少影响凭据时不能回退订单或自动重开任务。"""
     db = MagicMock()
     acceptance_result = MagicMock()
     acceptance_result.scalars.return_value.all.return_value = []
@@ -238,16 +238,17 @@ async def test_deleting_blank_installation_task_reopens_production_order():
             new=AsyncMock(),
         ) as reopen_production,
     ):
-        await installation_service.delete_task(task.id)
+        with pytest.raises(ValueError, match="查看删除影响"):
+            await installation_service.delete_task(task.id)
 
-    assert order.status == "in_production"
+    assert order.status == "in_installation"
     all_completed.assert_not_awaited()
-    reopen_production.assert_awaited_once_with(order, reopen_terminal=True)
+    reopen_production.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_deleting_production_task_reopens_design_order():
-    """删除制作任务后，已完成的设计卡片也必须重新打开。"""
+async def test_deleting_production_task_requires_preview():
+    """直接服务调用也必须经过删除影响确认。"""
     db = MagicMock()
     empty_result = MagicMock()
     empty_result.scalars.return_value.all.return_value = []
@@ -269,10 +270,11 @@ async def test_deleting_production_task_reopens_design_order():
         "_auto_create_design_task",
         new=AsyncMock(),
     ) as reopen_design:
-        await production_service.delete_task(task.id)
+        with pytest.raises(ValueError, match="查看删除影响"):
+            await production_service.delete_task(task.id)
 
-    assert order.status == "designing"
-    reopen_design.assert_awaited_once_with(order, reopen_terminal=True)
+    assert order.status == "in_production"
+    reopen_design.assert_not_awaited()
 
 
 @pytest.mark.asyncio

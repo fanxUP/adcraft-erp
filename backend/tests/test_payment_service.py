@@ -748,7 +748,7 @@ def test_expense_create_accepts_payable_amount_as_total_when_amount_is_empty():
 
 
 def test_expense_create_accepts_paid_and_payable_breakdown():
-    payload = ExpenseCreate(paid_amount=1000, payable_amount=2000)
+    payload = ExpenseCreate(paid_amount=1000, payable_amount=2000, expense_date="2026-10-30")
 
     assert payload.paid_amount == 1000
     assert payload.payable_amount == 2000
@@ -765,6 +765,7 @@ async def test_create_expense_calculates_total_from_paid_and_payable(expense_ser
             "paid_amount": 1000,
             "payable_amount": 2000,
             "description": "部分现付、部分欠款",
+            "expense_date": "2026-10-30",
         }, SAMPLE_USER_ID)
 
     created = svc.repo.create.await_args.args[0]
@@ -877,9 +878,13 @@ async def test_update_expense_normalizes_date_before_persistence(
     e = make_mock_expense()
     svc.repo.get_by_id.return_value = e
 
-    await svc.update_expense(SAMPLE_ORDER_ID, {"expense_date": raw_date})
-
-    assert e.expense_date == expected_date
+    if expected_date is None:
+        with pytest.raises(ValueError, match="付款日期"):
+            await svc.update_expense(SAMPLE_ORDER_ID, {"expense_date": raw_date})
+        svc.repo.update.assert_not_awaited()
+    else:
+        await svc.update_expense(SAMPLE_ORDER_ID, {"expense_date": raw_date})
+        assert e.expense_date == expected_date
 
 
 @pytest.mark.asyncio

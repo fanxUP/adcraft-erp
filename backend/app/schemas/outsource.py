@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ActionCapability, StatusView
 
@@ -140,8 +140,15 @@ class OutsourcePaymentCreate(BaseModel):
     amount: Decimal = Field(..., gt=0)
     payment_method: str | None = None
     payee_company_name: str | None = None
-    paid_at: str | None = None
+    paid_at: str
     remark: str | None = None
+
+    @field_validator("paid_at")
+    @classmethod
+    def valid_payment_date(cls, value: str) -> str:
+        from app.domain.payment_dates import require_payment_date
+        require_payment_date(value)
+        return value
 
 
 class OutsourcePaymentResponse(BaseModel):

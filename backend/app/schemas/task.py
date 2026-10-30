@@ -13,7 +13,7 @@ TaskType = Literal["design", "production", "installation"]
 class TaskDeleteImpactEntry(BaseModel):
     id: str
     label: str
-    effect: Literal["delete_task", "recycle_acceptance", "unlink_outsource", "reopen_task"]
+    effect: Literal["delete_task", "recycle_acceptance", "unlink_outsource", "reopen_task", "withdraw_scope", "preserve"]
     detail: str | None = None
     items: list[str] = Field(default_factory=list)
 
@@ -28,11 +28,13 @@ class TaskDeleteImpact(BaseModel):
     entries: list[TaskDeleteImpactEntry]
     warnings: list[str]
     plan_hash: str
+    allowed: bool = True
+    blocked_reason: str | None = None
 
 
 def _coerce_task_scope_status(value: object) -> str:
     """Keep responses compatible with rows/fixtures created before the migration."""
-    if isinstance(value, str) and value in {"active", "empty_after_item_delete"}:
+    if isinstance(value, str) and value in {"active", "empty_after_item_delete", "withdrawn"}:
         return value
     return "active"
 

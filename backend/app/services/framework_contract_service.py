@@ -231,6 +231,9 @@ class FrameworkContractService:
         from app.models.framework_contract import FrameworkContractProject
         from app.models.contract import Contract
 
+        # Non-key financial updates need not conflict with the key-share lock
+        # held by a concurrently inserted child project's foreign key.
+        contract = await self.db.get(Contract, contract_id, with_for_update={"key_share": True})
         result = await self.db.execute(
             select(func.coalesce(func.sum(FrameworkContractProject.project_amount), 0))
             .where(
@@ -240,10 +243,12 @@ class FrameworkContractService:
         )
         total = float(result.scalar())
 
-        contract = await self.db.get(Contract, contract_id)
         if contract:
             contract.total_amount = total
-            # 不更新 paid_amount/unpaid_amount，API 响应中会动态计算
+            from app.services.contract_service import ContractService
+            paid = await ContractService(self.db)._calc_paid_amount(contract_id)
+            contract.paid_amount = paid
+            contract.unpaid_amount = max(0, total - paid)
             await self.db.flush()
 
     async def update_attachment(self, project_id: UUID, path: str | None, name: str | None) -> dict:

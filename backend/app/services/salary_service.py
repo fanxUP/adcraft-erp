@@ -1077,7 +1077,9 @@ class SalaryRecordService:
                 await self._capture(record, await self._month_items(month),
                     {k: v for (eid, k), v in values.items() if eid == str(employee_id)})
             await self.db.flush()
-        result = await PayableService(self.db).register_payment("expense", record.expense_id, data, operated_by)
+        from uuid import NAMESPACE_URL, uuid5
+        result = await PayableService(self.db).register_payment("expense", record.expense_id,
+            {**data, "request_id": uuid5(NAMESPACE_URL, f"salary:{employee_id}:{month}:{request_key}")}, operated_by)
         status, _, _, paid_at = await self._payment_summary(record)
         record.snapshot = {**self._snapshot(record), "payment_requests": [*self._snapshot(record).get("payment_requests", []), request_key]}
         record.payment_status = status

@@ -37,14 +37,16 @@
       @closed="handleExpenseDialogClosed"
     >
       <el-form
+        ref="expenseFormRef"
         :model="form"
+        :rules="expenseRules"
         label-position="top"
         class="expense-form"
         :disabled="isEditing && !authStore.can('expense:update')"
       >
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
-            <el-form-item label="业务日期">
+            <el-form-item label="付款日期" prop="expense_date" :required="paymentDateRequired">
               <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -200,7 +202,8 @@
 <script setup lang="ts">
 import { getErrorMessage } from '@/utils/error'
 import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
-import { formatDate } from '@/utils/datetime'
+import { businessToday, formatDate } from '@/utils/datetime'
+import type { FormInstance } from 'element-plus'
 import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -248,6 +251,18 @@ const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const form = reactive({ category: '', payment_account_id: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
+const expenseFormRef = ref<FormInstance>()
+const originalPayment = ref({ amount: 0, method: '', account: '', date: '' })
+const paymentDateRequired = computed(() => form.paid_amount > 0 && (
+  !isEditing.value || !!originalPayment.value.date || form.paid_amount !== originalPayment.value.amount
+  || form.payment_method !== originalPayment.value.method
+  || form.payment_account_id !== originalPayment.value.account
+))
+const expenseRules = { expense_date: [{
+  validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+    callback(paymentDateRequired.value && !value ? new Error('请选择付款日期') : undefined)
+  }, trigger: 'change',
+}] }
 
 const EXPENSE_ATTACHMENT_ACCEPT = 'image/jpeg,image/png,image/webp,.pdf'
 const EXPENSE_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
@@ -291,6 +306,7 @@ function resetForm() {
 
 function openCreate() {
   resetForm()
+  form.expense_date = businessToday()
   showDialog.value = true
 }
 
@@ -320,6 +336,7 @@ function openEdit(row: ExpenseResponse) {
   form.payable_amount = row.payable_amount || 0
   const formattedExpenseDate = formatDate(row.expense_date)
   form.expense_date = formattedExpenseDate === '-' ? '' : formattedExpenseDate
+  originalPayment.value = { amount: form.paid_amount, method: form.payment_method, account: form.payment_account_id, date: form.expense_date }
   form.description = row.description || ''
   showDialog.value = true
   void loadExpenseAttachments(row.id)
@@ -561,6 +578,7 @@ function expenseImagePreviewIndex(attachmentId: string) {
 }
 
 async function handleSave() {
+  if (saving.value || !await expenseFormRef.value?.validate().catch(() => false)) return
   let normalizedAmounts: ExpenseAmountResult
   try {
     normalizedAmounts = normalizeExpenseAmounts(totalAmount.value, form.payable_amount)

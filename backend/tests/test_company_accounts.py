@@ -2,7 +2,7 @@
 import os
 from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -68,7 +68,7 @@ async def test_initial_then_partial_payments_partition_without_changing_source_t
     source_id = UUID(source["id"])
     for amount, account_id in [(200, later["id"]), (100, first["id"])]:
         await PayableService(db).register_payment("expense", source_id, {
-            "amount": amount, "payment_account_id": account_id, "payment_method": "转账支付", "paid_at": "2026-10-02",
+            "request_id": uuid4(), "amount": amount, "payment_account_id": account_id, "payment_method": "转账支付", "paid_at": "2026-10-02",
         }, None)
     ledger = await expenditure.list_records("ledger")
     row = next(row for row in ledger["items"] if row["source_id"] == source["id"])
@@ -94,7 +94,7 @@ async def test_new_cash_requires_account_but_all_unpaid_and_historical_notes_rem
     db, _, ids = fixture_db
     expense = ExpenseService(db)
     with pytest.raises(ValueError, match="请选择付款账户"):
-        await expense.create_expense({"paid_amount": 1, "payable_amount": 0}, None)
+        await expense.create_expense({"paid_amount": 1, "payable_amount": 0, "expense_date": "2026-10-30"}, None)
     unpaid = await expense.create_expense({"paid_amount": 0, "payable_amount": 50}, None)
     assert unpaid["payment_account_id"] is None
     await db.execute(update(Expense).where(Expense.id == ids["expense"]).values(payable_amount=500))

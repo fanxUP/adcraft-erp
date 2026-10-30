@@ -182,7 +182,7 @@ class ContractService:
             return v
         return None
 
-    def _auto_status_for(self, contract, paid: float) -> str | None:
+    def _auto_status_for(self, contract, paid: float, total: float | None = None) -> str | None:
         """按「结束日期为主、收款为次」判定目标状态：
         - 已完成：已过结束日期 且 已收满款（无结束日期则只看收款）
         - 已生效：已过生效日期；或曾为生效/已完成而条件不再满足时回归已生效
@@ -190,7 +190,9 @@ class ContractService:
         today = _business_today()
         end_day = self._to_day(contract.end_date)
         start_day = self._to_day(contract.start_date)
-        total = float(contract.total_amount or 0)
+        if contract.status in ("cancelled", "terminated"):
+            return None
+        total = float(contract.total_amount or 0) if total is None else total
         fully_paid = total > 0 and paid >= total
 
         # 完成判定：结束日期为主、收款为次 —— 需同时满足
@@ -212,9 +214,10 @@ class ContractService:
         if not contracts:
             return False
         paid_map = await self._batch_paid_amounts([c.id for c in contracts])
+        totals = await self._batch_framework_totals([c.id for c in contracts])
         changed = False
         for c in contracts:
-            target = self._auto_status_for(c, paid_map.get(c.id, 0.0))
+            target = self._auto_status_for(c, paid_map.get(c.id, 0.0), totals.get(c.id, float(c.total_amount or 0)))
             if target and c.status != target:
                 c.status = target
                 changed = True
@@ -230,6 +233,14 @@ class ContractService:
         d["source"] = "订单" if docs else ""
         d["status_view"] = make_contract_status_view(contract.status).model_dump(mode="json")
         return d
+
+    def _project_financials(self, response, contract, paid, total):
+        response["total_amount"] = total
+        response["paid_amount"] = paid
+        response["unpaid_amount"] = max(0, total - paid)
+        response["status"] = self._auto_status_for(contract, paid, total) or contract.status
+        response["status_view"] = make_contract_status_view(response["status"]).model_dump(mode="json")
+        return self._redact_financial_fields(response)
 
     def _to_detail(self, contract) -> dict:
         d = ContractDetailResponse.model_validate(contract).model_dump(mode="json")
@@ -256,9 +267,8 @@ class ContractService:
         contracts, total = await self.repo.list_contracts(
             skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id,
             contract_type=contract_type, exclude_contract_type=exclude_contract_type,
+            business_day=_business_today(),
         )
-        # 自动推进状态：超过生效/结束日期自动跳转
-        await self._sync_auto_status(contracts)
 
 
         # Batch-calculate paid_amount and framework totals for all contracts in this page
@@ -271,12 +281,7 @@ class ContractService:
         for c in contracts:
             resp = self._to_response(c)
             paid = paid_map.get(c.id, 0.0)
-            proj_total = fw_total_map.get(c.id)
-            if proj_total is not None and proj_total > 0:
-                resp["total_amount"] = proj_total
-            resp["paid_amount"] = paid
-            resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
-            result.append(self._redact_financial_fields(resp))
+            result.append(self._project_financials(resp, c, paid, fw_total_map.get(c.id, resp["total_amount"])))
         return result, total
 
     async def list_orders_without_contract(
@@ -417,17 +422,10 @@ class ContractService:
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
             return None
-        # 自动推进状态
-        await self._sync_auto_status([contract])
         result = self._to_detail(contract)
-        # 所有合同：金额 = 子项目合计（无子项目则用合同自身金额）
-        proj_total = await self._calc_framework_total(contract_id)
-        if proj_total > 0:
-            result["total_amount"] = proj_total
-        # Override paid_amount with actual payments on linked documents
-        result["paid_amount"] = await self._calc_paid_amount(contract_id)
-        result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
-        return self._redact_financial_fields(result)
+        totals = await self._batch_framework_totals([contract_id])
+        return self._project_financials(result, contract, await self._calc_paid_amount(contract_id),
+                                        totals.get(contract_id, result["total_amount"]))
 
     def _combine_document_ids(self, data: dict) -> list[UUID]:
         """Extract order_ids from the payload. Supports both order_ids and document_ids keys."""

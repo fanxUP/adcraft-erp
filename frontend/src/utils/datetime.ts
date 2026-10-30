@@ -17,6 +17,15 @@ function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
 
+/** A date input defaults to the ERP's business day, independent of browser TZ. */
+export function businessToday(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const value = (type: string) => parts.find(part => part.type === type)?.value || ''
+  return `${value('year')}-${value('month')}-${value('day')}`
+}
+
 export function formatDate(ts?: string | null): string {
   if (!ts) return '-'
   // 纯日期（YYYY-MM-DD，无时间部分）直接返回

@@ -1,5 +1,6 @@
 from app.schemas.common import ActionCapability, CoercedModel, StatusView
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from app.domain.payment_dates import require_payment_date
 from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
@@ -148,6 +149,15 @@ class ExpenseCreate(BaseModel):
     expense_date: str | None = None
     receipt_url: str | None = None
 
+    @model_validator(mode="after")
+    def initial_payment_date_required(self):
+        paid = self.paid_amount if self.paid_amount is not None else self.amount - self.payable_amount
+        if paid > 0:
+            require_payment_date(self.expense_date)
+        elif self.expense_date is not None:
+            require_payment_date(self.expense_date)
+        return self
+
     @field_validator("amount")
     @classmethod
     def amount_positive(cls, v: float) -> float:
@@ -246,12 +256,19 @@ class ExpenseResponse(CoercedModel):
 
 
 class PayablePaymentCreate(BaseModel):
+    request_id: UUID
     payment_account_id: str | None = None
     amount: float
     payment_method: str = "转账支付"
-    paid_at: str | None = None
+    paid_at: str
     remark: str | None = None
     receipt_url: str | None = None
+
+    @field_validator("paid_at")
+    @classmethod
+    def valid_payment_date(cls, value: str) -> str:
+        require_payment_date(value)
+        return value
 
     @field_validator("amount")
     @classmethod
@@ -471,9 +488,17 @@ class ProjectCostResponse(CoercedModel):
 class DebtSettleCreate(BaseModel):
     """结算欠款"""
     payment_account_id: str | None = None
+    request_id: UUID
+    paid_at: str
     settle_amount: float
     payment_method: str = "转账支付"
     remark: str | None = None
+
+    @field_validator("paid_at")
+    @classmethod
+    def valid_payment_date(cls, value: str) -> str:
+        require_payment_date(value)
+        return value
 
     @field_validator("settle_amount")
     @classmethod

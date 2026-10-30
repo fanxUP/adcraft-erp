@@ -33,6 +33,8 @@ class PayablePayment(Base, TimestampMixin):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     payment_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
+    request_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_type: Mapped[str] = mapped_column(
         String(32), nullable=False, comment="来源类型：expense/project_cost"
     )

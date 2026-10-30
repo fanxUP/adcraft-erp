@@ -70,7 +70,6 @@ from app.services.task_service import (
     acknowledge_task_order_review,
     get_task_order_item_options,
     get_task_delete_impact,
-    validate_task_delete_impact,
 )
 from app.services.order_task_assignment_service import list_task_assignee_options, get_visible_task
 from app.services.operation_log_service import ACTION_CREATE, OBJ_ORDER, log_operation
@@ -694,9 +693,7 @@ async def delete_design_task(
 ):
     service = DesignTaskService(db, current_user)
     try:
-        if isinstance(plan_hash, str):
-            await validate_task_delete_impact(db, "design", _ensure_uuid(task_id), current_user, plan_hash)
-        await service.delete_task(_ensure_uuid(task_id))
+        await service.delete_task(_ensure_uuid(task_id), plan_hash=plan_hash)
         return success(None)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
@@ -833,9 +830,7 @@ async def delete_production_task(
 ):
     service = ProductionTaskService(db, current_user)
     try:
-        if isinstance(plan_hash, str):
-            await validate_task_delete_impact(db, "production", _ensure_uuid(task_id), current_user, plan_hash)
-        await service.delete_task(_ensure_uuid(task_id))
+        await service.delete_task(_ensure_uuid(task_id), plan_hash=plan_hash)
         return success(None)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
@@ -993,9 +988,7 @@ async def delete_installation_task(
 ):
     service = InstallationTaskService(db, current_user)
     try:
-        if isinstance(plan_hash, str):
-            await validate_task_delete_impact(db, "installation", _ensure_uuid(task_id), current_user, plan_hash)
-        await service.delete_task(_ensure_uuid(task_id))
+        await service.delete_task(_ensure_uuid(task_id), plan_hash=plan_hash)
         return success(None)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}

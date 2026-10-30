@@ -796,6 +796,8 @@ async def settle_cost_debt(
             UUID(cost_id),
             {
                 "amount": data.settle_amount,
+                "request_id": data.request_id,
+                "paid_at": data.paid_at,
                 "payment_account_id": data.payment_account_id,
                 "payment_method": data.payment_method,
                 "remark": data.remark,

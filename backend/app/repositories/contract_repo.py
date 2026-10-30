@@ -1,10 +1,42 @@
 from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import not_, select, func
+from sqlalchemy import Date, and_, case, cast, exists, not_, or_, select, func
 from sqlalchemy.orm import selectinload
 
 from app.models.contract import Contract, ContractDocument
+
+
+def contract_total_expression():
+    """An existing zero-valued project scope must not fall back to an old total."""
+    from app.models.framework_contract import FrameworkContractProject
+    projects = select(func.sum(FrameworkContractProject.project_amount)).where(
+        FrameworkContractProject.contract_id == Contract.id,
+        FrameworkContractProject.deleted_at.is_(None),
+    ).correlate(Contract).scalar_subquery()
+    return func.coalesce(projects, Contract.total_amount, 0)
+
+
+def contract_status_expression(today):
+    from app.models.payment import Payment, PaymentAllocation
+    from app.repositories.payment_repo import active_unambiguous_contract_links
+    allocated = select(func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0)).join(
+        Payment, Payment.id == PaymentAllocation.payment_id,
+    ).where(PaymentAllocation.contract_id == Contract.id, Payment.is_voided.is_(False)).correlate(Contract).scalar_subquery()
+    links = active_unambiguous_contract_links()
+    legacy = select(func.coalesce(func.sum(Payment.amount), 0)).join(
+        links, links.c.document_id == Payment.document_id,
+    ).where(links.c.contract_id == Contract.id, Payment.is_voided.is_(False),
+        ~exists(select(PaymentAllocation.id).where(PaymentAllocation.payment_id == Payment.id)),
+    ).correlate(Contract).scalar_subquery()
+    total = contract_total_expression()
+    return case(
+        (Contract.status.in_(["cancelled", "terminated"]), Contract.status),
+        (and_(total > 0, allocated + legacy >= total,
+              or_(Contract.end_date.is_(None), cast(Contract.end_date, Date) < today)), "completed"),
+        (or_(cast(Contract.start_date, Date) <= today, Contract.status.in_(["active", "completed"])), "active"),
+        else_=Contract.status,
+    )
 
 
 class ContractRepository:
@@ -28,12 +60,16 @@ class ContractRepository:
         customer_id: str | None = None,
         contract_type: str | None = None,
         exclude_contract_type: str | None = None,
+        business_day=None,
     ) -> tuple[list[Contract], int]:
         q = select(Contract).options(
             selectinload(Contract.documents),
         ).where(Contract.deleted_at.is_(None))
         if status:
-            q = q.where(Contract.status == status)
+            if business_day is None:
+                from zoneinfo import ZoneInfo
+                business_day = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+            q = q.where(contract_status_expression(business_day) == status)
         if keyword:
             q = q.where(
                 Contract.contract_no.ilike(f"%{keyword}%")

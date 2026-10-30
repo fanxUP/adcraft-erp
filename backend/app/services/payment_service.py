@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_document import BusinessDocument
 from app.models.contract import Contract
-from app.models.framework_contract import FrameworkContractProject
 from app.models.payment import CustomerStatement, Expense, Payment, PaymentAllocation
+from app.domain.payment_dates import require_payment_date
 from app.repositories.payment_repo import (
     ExpenseRepository,
     PaymentRepository,
@@ -121,16 +121,9 @@ class PaymentService:
     async def _get_contract_total(self, contract: Contract) -> Decimal:
         """Return the effective receivable total for a contract."""
         if contract.contract_type == "框架合同":
-            result = await self.db.execute(
-                select(func.coalesce(func.sum(FrameworkContractProject.project_amount), 0))
-                .where(
-                    FrameworkContractProject.contract_id == contract.id,
-                    FrameworkContractProject.deleted_at.is_(None),
-                )
-            )
-            project_total = Decimal(str(result.scalar() or 0))
-            if project_total > 0:
-                return project_total
+            from app.repositories.contract_repo import contract_total_expression
+            result = await self.db.execute(select(contract_total_expression()).where(Contract.id == contract.id))
+            return Decimal(str(result.scalar() or 0))
         return Decimal(str(contract.total_amount or 0))
 
     async def _resolve_contract_for_order(self, order_id: UUID) -> UUID:
@@ -634,6 +627,8 @@ class ExpenseService:
             amount,
             requested_payable_amount,
         )
+        if amount > payable_amount:
+            require_payment_date(data.get("expense_date"))
         supplier = await SupplierService(self.db).resolve_active_supplier(data.get("supplier_id"))
         account_id = await CompanyAccountService(self.db).initial_account(data, amount - payable_amount)
         expense = Expense(
@@ -715,11 +710,14 @@ class ExpenseService:
         )
         payment_changed = (
             amount - payable_amount != _money_or_zero(e.amount) - current_payable_amount
+            or ("payment_account_id" in data and _uuid_or_none(data["payment_account_id"]) != _uuid_or_none(e.payment_account_id))
             or ("payment_method" in normalized and (normalized["payment_method"] or None) != (e.payment_method or None))
             or ("expense_date" in normalized and
                 (normalized["expense_date"].date() if normalized["expense_date"] else None) !=
                 (e.expense_date.date() if e.expense_date else None))
         )
+        if amount > payable_amount and (payment_changed or "expense_date" in data):
+            require_payment_date(data.get("expense_date", e.expense_date))
         normalized["payment_account_id"] = await CompanyAccountService(self.db).initial_account(
             data, amount - payable_amount, current=e, payment_changed=payment_changed,
         )

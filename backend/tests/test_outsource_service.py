@@ -788,6 +788,7 @@ async def test_create_payment(service):
         result = await svc.create_payment({
             "vendor_id": SAMPLE_USER_ID,
                 "payment_account_id": str(SAMPLE_USER_ID),
+            "paid_at": "2026-10-30",
             "amount": 500.0,
         })
     assert result["payment_no"] == "OP20260629-0002"
@@ -803,6 +804,7 @@ async def test_create_payment_rejects_vendor_mismatch(service):
         await svc.create_payment({
             "vendor_id": "99999999-9999-9999-9999-999999999999",
             "task_id": SAMPLE_ORDER_ID,
+            "paid_at": "2026-10-30",
             "amount": 100,
         })
 
@@ -821,6 +823,7 @@ async def test_create_payment_rejects_amount_above_task_balance(service):
         await svc.create_payment({
             "vendor_id": SAMPLE_USER_ID,
             "task_id": SAMPLE_ORDER_ID,
+            "paid_at": "2026-10-30",
             "amount": 101,
         })
 
@@ -845,7 +848,8 @@ async def test_create_payment_updates_balance_and_creator(service):
                 "vendor_id": SAMPLE_USER_ID,
                 "payment_account_id": str(SAMPLE_USER_ID),
                 "task_id": SAMPLE_ORDER_ID,
-                "amount": 150,
+                "paid_at": "2026-10-30",
+            "amount": 150,
             },
             created_by=SAMPLE_USER_ID,
         )
@@ -876,6 +880,7 @@ async def test_full_payment_settles_completed_task(service):
             "vendor_id": SAMPLE_USER_ID,
                 "payment_account_id": str(SAMPLE_USER_ID),
             "task_id": SAMPLE_ORDER_ID,
+            "paid_at": "2026-10-30",
             "amount": 100,
         })
 

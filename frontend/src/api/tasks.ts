@@ -159,7 +159,7 @@ export function getTaskAssigneeOptions(taskType: TaskType) {
 export interface TaskDeleteImpactEntry {
   id: string
   label: string
-  effect: 'delete_task' | 'recycle_acceptance' | 'unlink_outsource' | 'reopen_task'
+  effect: 'delete_task' | 'recycle_acceptance' | 'unlink_outsource' | 'reopen_task' | 'withdraw_scope' | 'preserve'
   detail?: string | null
   items?: string[]
 }
@@ -174,6 +174,8 @@ export interface TaskDeleteImpact {
   entries: TaskDeleteImpactEntry[]
   warnings: string[]
   plan_hash: string
+  allowed: boolean
+  blocked_reason: string | null
 }
 
 export function getTaskDeleteImpact(taskType: TaskType, taskId: string) {

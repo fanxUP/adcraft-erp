@@ -316,6 +316,7 @@ async def test_later_stage_reopens_only_rolled_back_item_on_existing_card(
     rolled_back_link = MagicMock()
     rolled_back_link.order_item_id = ITEM_TWO_ID
     rolled_back_link.item_status = "rolled_back"
+    rolled_back_link.link_status = "active"
     link_rows = AsyncMock(return_value=[rolled_back_link])
     sync_links = AsyncMock()
     with (
@@ -382,6 +383,7 @@ async def test_later_stage_does_not_revive_cancelled_item_link(
     cancelled_link = MagicMock()
     cancelled_link.order_item_id = ITEM_TWO_ID
     cancelled_link.item_status = "cancelled"
+    cancelled_link.link_status = "active"
     link_rows = AsyncMock(return_value=[cancelled_link])
     sync_links = AsyncMock()
     with (

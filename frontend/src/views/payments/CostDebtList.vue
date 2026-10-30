@@ -116,7 +116,7 @@
     </DataTableShell>
 
     <el-dialog v-model="showPayment" title="登记付款" width="500px" :close-on-click-modal="false">
-      <el-form :model="paymentForm" label-width="100px">
+      <el-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" label-width="100px">
         <el-form-item label="应付来源">
           <div>{{ paymentTarget?.source_label }} · {{ paymentTarget?.source_no }}</div>
         </el-form-item>
@@ -144,7 +144,7 @@
             <el-option v-for="method in PAYMENT_METHODS" :key="method" :label="method" :value="method" />
           </el-select>
         </el-form-item>
-        <el-form-item label="付款日期" required>
+        <el-form-item label="付款日期" prop="paid_at" required>
           <el-date-picker v-model="paymentForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -195,12 +195,14 @@ import { getErrorMessage } from '@/utils/error'
 import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 import { createPayablePayment, getPayable, getPayables, voidPayablePayment } from '@/api/payments'
 import { getSuppliers } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import type { PayablePaymentResponse, PayableResponse, SupplierResponse } from '@/types/api'
-import { formatDate } from '@/utils/datetime'
+import { businessToday, formatDate } from '@/utils/datetime'
+import { newRequestId } from '@/utils/requestId'
 import { formatMoney } from '@/utils/format'
 
 const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
@@ -230,12 +232,15 @@ const filters = reactive({
 })
 
 const paymentForm = reactive({
+  request_id: newRequestId(),
   amount: 0,
   payment_account_id: '',
   payment_method: '转账支付',
-  paid_at: new Date().toISOString().slice(0, 10),
+  paid_at: businessToday(),
   remark: '',
 })
+const paymentFormRef = ref<FormInstance>()
+const paymentRules = { paid_at: [{ required: true, message: '请选择付款日期', trigger: 'change' }] }
 
 const pendingTotal = computed(() => list.value.reduce((sum, row) => sum + (row.remaining_amount || 0), 0))
 const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
@@ -284,17 +289,21 @@ function openPayment(row: PayableResponse) {
   paymentForm.amount = row.remaining_amount
   paymentForm.payment_account_id = ''
   paymentForm.payment_method = '转账支付'
-  paymentForm.paid_at = new Date().toISOString().slice(0, 10)
+  paymentForm.request_id = newRequestId()
+  paymentForm.paid_at = businessToday()
   paymentForm.remark = ''
   showPayment.value = true
 }
 
 async function handlePayment() {
+  if (savingPayment.value) return
   if (!paymentTarget.value || paymentForm.amount <= 0) return
+  if (!await paymentFormRef.value?.validate().catch(() => false)) return
   if (!paymentForm.payment_account_id) { ElMessage.warning('请选择付款账户'); return }
   savingPayment.value = true
   try {
     await createPayablePayment(paymentTarget.value.source_type, paymentTarget.value.source_id, {
+      request_id: paymentForm.request_id,
       payment_account_id: paymentForm.payment_account_id,
       amount: paymentForm.amount,
       payment_method: paymentForm.payment_method,

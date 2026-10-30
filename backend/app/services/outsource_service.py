@@ -1043,9 +1043,8 @@ class OutsourceService:
     ) -> dict:
         data = dict(data)
         # Convert string fields to proper types
-        if data.get("paid_at"):
-            from datetime import datetime as dt
-            data["paid_at"] = dt.fromisoformat(data["paid_at"])
+        from app.domain.payment_dates import require_payment_date
+        data["paid_at"] = require_payment_date(data.get("paid_at"))
         if data.get("task_id") and not isinstance(data["task_id"], UUID):
             data["task_id"] = UUID(data["task_id"])
         if not isinstance(data["vendor_id"], UUID):

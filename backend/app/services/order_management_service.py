@@ -310,10 +310,17 @@ class OrderManagementService:
         projects = (await self.db.execute(select(FrameworkContractProject)
             .join(FrameworkContractProjectDocument, FrameworkContractProjectDocument.project_id == FrameworkContractProject.id)
             .where(FrameworkContractProjectDocument.document_id == doc.id, FrameworkContractProject.deleted_at.is_(None)).with_for_update(of=FrameworkContractProject))).scalars().all()
+        changed_contract_ids = set()
         for project in projects:
-            if project.contract.status == "draft" and len(project.documents) == 1 and money(project.project_amount) == money((before or {}).get("total_amount")):
+            parent = await self.db.get(Contract, project.contract_id, with_for_update={"key_share": True}, populate_existing=True)
+            if parent and parent.status == "draft" and len(project.documents) == 1 and money(project.project_amount) == money((before or {}).get("total_amount")):
                 project.project_amount = doc.total_amount
+                changed_contract_ids.add(parent.id)
                 refreshed.add(("framework_contracts", str(project.id)))
+        await self.db.flush()
+        from app.services.framework_contract_service import FrameworkContractService
+        for contract_id in sorted(changed_contract_ids, key=str):
+            await FrameworkContractService(self.db)._sync_contract_total(contract_id)
         for module, key in sorted(refreshed):
             refresh.setdefault("auto_refreshed", []).append({"module": module, "record_id": key, "detail": "已按明确订单来源刷新草稿内容"})
         refresh["pending_review"] = [row for row in refresh.get("pending_review", []) if (row.get("module"), row.get("record_id")) not in refreshed]
