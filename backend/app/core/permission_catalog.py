@@ -54,6 +54,16 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     'department:manage': ('department:read',),
     "company_account:manage": ("company_account:read", "company_account:view_number"),
     "company_account:view_number": ("company_account:read",),
+    "company_account:ledger_read": (
+        "company_account:read",
+        "expense:read",
+        "finance:view_cost",
+        "outsource_center:read",
+        "outsource_task:read",
+        "outsource_payment:read",
+    ),
+    "company_account:ledger_create": ("company_account:ledger_read",),
+    "company_account:opening_balance_set": ("company_account:ledger_read",),
     # Delivery task list/actions require detail read permission.
     "task_queue:view_all": ("task_queue:read",),
     "design_task:list": ("design_task:read",),
@@ -162,6 +172,7 @@ TASK_MUTATION_PERMISSIONS = frozenset({
 
 SENSITIVE_PERMISSIONS = frozenset({
     "company_account:read", "company_account:manage", "company_account:view_number", "company_account:select",
+    "company_account:ledger_read", "company_account:ledger_create", "company_account:opening_balance_set",
     "order:create",
     "order:update",
     "order:delete",

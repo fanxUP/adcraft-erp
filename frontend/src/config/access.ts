@@ -222,7 +222,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   // finance:view_cost 只代表成本字段可见，不能单独打开包含支出的应付台账。
   costDebt: ['expense:read'],
   companyAccount: ['company_account:read'],
-  bankLedger: { allOf: ['company_account:read', 'expense:read'] },
+  bankLedger: { allOf: ['company_account:read', 'expense:read', 'company_account:ledger_read'] },
   supplier: { anyGroups: [['supplier_center:read', 'supplier:read'], ['outsource_center:read', 'outsource_vendor:read']] },
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },

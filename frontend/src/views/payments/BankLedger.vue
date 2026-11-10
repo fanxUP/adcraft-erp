@@ -1,7 +1,7 @@
 <template>
   <AppPage>
     <template #header>
-      <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看已登记且有付款日期的支出。" />
+      <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看收支流水与账面余额。" />
     </template>
 
     <StatePanel v-if="accountsLoading" state="loading" title="正在加载账户" />
@@ -26,38 +26,66 @@
         </template>
 
         <template v-if="account.id === activeAccountId">
+          <div class="bank-ledger-actions">
+            <p class="bank-ledger-hint">
+              期初日期为账本起始日；该日期及之后的 ERP 付款和手工流水会参与余额计算。
+            </p>
+            <div class="bank-ledger-buttons">
+              <el-button v-if="canSetOpeningBalance" :disabled="loading || !result" @click="openOpeningBalance(account)">期初余额</el-button>
+              <el-tooltip
+                v-if="canCreateEntry && (!result?.opening_balance || !account.is_active)"
+                :content="!account.is_active ? '停用账户不能登记新流水' : '请先设置期初余额后登记流水'"
+                placement="top"
+              >
+                <span><el-button type="primary" disabled>登记台账</el-button></span>
+              </el-tooltip>
+              <el-button
+                v-else-if="canCreateEntry"
+                type="primary"
+                @click="openEntry(account)"
+              >登记台账</el-button>
+            </div>
+          </div>
+
           <dl class="bank-ledger-summary" aria-label="账户统计" :aria-busy="loading">
-            <div><dt>付款笔数</dt><dd>{{ result ? `${result.total} 笔` : '—' }}</dd></div>
-            <div><dt>收入合计</dt><dd>待接入</dd></div>
-            <div><dt>支出合计</dt><dd>{{ result ? formatMoney(result.summary.amount) : '—' }}</dd></div>
-            <div><dt>账户余额</dt><dd>未建账</dd></div>
+            <div><dt>期初余额</dt><dd>{{ result ? money(result.summary.opening_balance, '未设置') : '—' }}</dd></div>
+            <div><dt>收入合计</dt><dd>{{ result ? formatMoney(result.summary.income_amount) : '—' }}</dd></div>
+            <div><dt>支出合计</dt><dd>{{ result ? formatMoney(result.summary.expense_amount) : '—' }}</dd></div>
+            <div><dt>账户余额</dt><dd>{{ result ? money(result.summary.balance, '未建账') : '—' }}</dd></div>
           </dl>
 
           <DataTableShell aria-label="账户流水">
-            <el-table :data="result?.items ?? []" row-key="row_key" stripe>
+            <el-table :data="result?.items ?? []" row-key="id" stripe>
               <el-table-column label="日期" width="115">
-                <template #default="{ row }">{{ expenditureDateLabel(row.paid_at) }}</template>
+                <template #default="{ row }">{{ row.entry_date }}</template>
               </el-table-column>
-              <el-table-column label="摘要" min-width="170" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.description || '—' }}</template>
+              <el-table-column label="摘要" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="ledger-summary-cell">
+                    <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
+                      {{ row.source_label }}
+                    </el-tag>
+                    <span>{{ row.summary || '—' }}</span>
+                  </div>
+                </template>
               </el-table-column>
-              <el-table-column label="对方账号" min-width="130">
-                <template #default>—</template>
+              <el-table-column label="对方账号" min-width="135" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.counterparty_account || '—' }}</template>
               </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.supplier_name || '—' }}</template>
+                <template #default="{ row }">{{ row.counterparty_name || '—' }}</template>
               </el-table-column>
-              <el-table-column label="分类" min-width="100" show-overflow-tooltip>
-                <template #default="{ row }">{{ expenditureCategoryLabel(row.source_type, row.category) }}</template>
+              <el-table-column prop="category" label="分类" min-width="110" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.category || '—' }}</template>
               </el-table-column>
               <el-table-column label="收入金额" min-width="115" align="right">
-                <template #default>—</template>
+                <template #default="{ row }">{{ row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="支出金额" min-width="115" align="right">
-                <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
+                <template #default="{ row }">{{ row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
               </el-table-column>
-              <el-table-column label="余额" min-width="115" align="right">
-                <template #default>—</template>
+              <el-table-column label="余额" min-width="125" align="right">
+                <template #default="{ row }">{{ money(row.balance, '—') }}</template>
               </el-table-column>
               <el-table-column label="项目" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.project_name || '—' }}</template>
@@ -67,8 +95,8 @@
               </el-table-column>
               <template #empty>
                 <StatePanel v-if="loading" state="loading" title="正在加载账户流水" />
-                <StatePanel v-else-if="loadError" state="error" title="账户流水加载失败" action-label="重试" @action="loadPayments" />
-                <StatePanel v-else title="暂无付款记录" description="该账户暂无有付款日期的已登记支出。" />
+                <StatePanel v-else-if="loadError" state="error" title="账户流水加载失败" action-label="重试" @action="loadLedger" />
+                <StatePanel v-else title="暂无账户流水" description="设置期初余额后，可登记或查看该账户的资金流水。" />
               </template>
             </el-table>
             <template v-if="result && result.total > pageSize" #footer>
@@ -81,35 +109,199 @@
               />
             </template>
           </DataTableShell>
-          <p v-if="result?.items.length" class="bank-ledger-note">对方户名按 ERP 支出记录中的收款方显示。</p>
+          <p class="bank-ledger-note">
+            ERP 已确认且已关联此账户的支出付款会自动列入。客户收款尚未关联公司账户时不会自动出现；手工登记只补录资金台账，不改变订单收款或支出业务金额。请勿重复登记已在 ERP 付款记录中列出的款项。
+          </p>
         </template>
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog
+      v-model="openingDialogVisible"
+      :title="(openingTarget?.name || '') + ' · 期初余额'"
+      width="min(94vw, 520px)"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        class="dialog-note"
+        type="info"
+        :closable="false"
+        title="期初余额是所选日期开始时的账户余额。该日期及之后的流水会参与计算；此前 ERP 记录不会重复叠加，也不会被修改。"
+      />
+      <el-form ref="openingFormRef" :model="openingForm" :rules="openingRules" label-position="top">
+        <el-form-item label="期初日期" prop="entry_date" required>
+          <el-date-picker v-model="openingForm.entry_date" type="date" value-format="YYYY-MM-DD" :clearable="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="期初余额" prop="amount" required>
+          <el-input-number v-model="openingForm.amount" :min="0" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="openingDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mutating" @click="saveOpeningBalance">保存期初余额</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="entryDialogVisible"
+      :title="(entryTarget?.name || '') + ' · 登记台账'"
+      width="min(94vw, 680px)"
+      :close-on-click-modal="false"
+      @closed="resetEntryForm"
+    >
+      <el-alert
+        class="dialog-note"
+        type="warning"
+        :closable="false"
+        title="仅登记尚未在 ERP 付款记录中入账的收支。手工流水不会更新订单、支出或应付业务数据。"
+      />
+      <el-form ref="entryFormRef" :model="entryForm" :rules="entryRules" label-position="top" class="entry-form">
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="日期" prop="entry_date" required>
+              <el-date-picker v-model="entryForm.entry_date" type="date" value-format="YYYY-MM-DD" :clearable="false" :disabled-date="isEntryDateDisabled" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="收支方向" prop="direction" required>
+              <el-select v-model="entryForm.direction" style="width: 100%">
+                <el-option label="收入" value="income" />
+                <el-option label="支出" value="expense" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="金额" prop="amount" required>
+              <el-input-number v-model="entryForm.amount" :min="0.01" :precision="2" :controls="false" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="分类" prop="category">
+              <el-select v-model="entryForm.category" filterable allow-create default-first-option clearable placeholder="选择或填写分类" style="width: 100%">
+                <el-option v-for="category in categoryOptions" :key="category" :label="category" :value="category" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="摘要" prop="summary" required>
+          <el-input v-model="entryForm.summary" maxlength="255" placeholder="例如：银行利息、账户手续费" />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="对方户名">
+              <el-input v-model="entryForm.counterparty_name" maxlength="200" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="对方账号">
+              <el-input v-model="entryForm.counterparty_account" maxlength="200" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="项目">
+              <el-input v-model="entryForm.project_name" maxlength="255" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="部门/科室">
+              <el-input v-model="entryForm.department" maxlength="255" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="entryDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mutating" @click="submitEntry">登记流水</el-button>
+      </template>
+    </el-dialog>
   </AppPage>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, shallowRef, watch } from 'vue'
-import { accountTypeLabels, getCompanyAccountOptions, type CompanyAccount } from '@/api/companyAccounts'
-import { getExpenditure, type ExpenditureResult } from '@/api/payments'
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import {
+  accountTypeLabels,
+  createBankLedgerEntry,
+  getBankLedger,
+  getCompanyAccountOptions,
+  setBankLedgerOpeningBalance,
+  type BankLedgerResult,
+  type CompanyAccount,
+} from '@/api/companyAccounts'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
-import { expenditureCategoryLabel, expenditureDateLabel, latestRequest } from '@/utils/expenditure'
+import { useAuthStore } from '@/stores/auth'
+import { businessToday } from '@/utils/datetime'
+import { getErrorMessage } from '@/utils/error'
+import { newRequestId } from '@/utils/requestId'
+import { latestRequest } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
 
+const EXPENSE_CATEGORIES = ['手续费', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他支出']
+const INCOME_CATEGORIES = ['客户收款（台账补录）', '利息收入', '其他收入']
+
+const auth = useAuthStore()
+const canCreateEntry = computed(() => auth.can('company_account:ledger_create'))
+const canSetOpeningBalance = computed(() => auth.can('company_account:opening_balance_set'))
 const accounts = shallowRef<CompanyAccount[]>([])
 const accountsLoading = ref(true)
 const accountsError = ref(false)
 const activeAccountId = ref('')
 const page = ref(1)
 const pageSize = 20
-const result = shallowRef<ExpenditureResult | null>(null)
+const result = shallowRef<BankLedgerResult | null>(null)
 const loading = ref(false)
 const loadError = ref(false)
 const requests = latestRequest()
+const mutating = ref(false)
+const openingDialogVisible = ref(false)
+const openingTarget = ref<CompanyAccount | null>(null)
+const openingFormRef = ref<FormInstance>()
+const openingForm = reactive({ entry_date: '', amount: null as number | null })
+const entryDialogVisible = ref(false)
+const entryTarget = ref<CompanyAccount | null>(null)
+const entryFormRef = ref<FormInstance>()
+const entryForm = reactive({
+  request_id: newRequestId(),
+  entry_date: businessToday(),
+  direction: 'expense' as 'income' | 'expense',
+  amount: null as number | null,
+  summary: '',
+  counterparty_account: '',
+  counterparty_name: '',
+  category: '',
+  project_name: '',
+  department: '',
+})
+const categoryOptions = computed(() => entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
+const openingRules = {
+  entry_date: [{ required: true, message: '请选择期初日期', trigger: 'change' }],
+  amount: [{ required: true, type: 'number', min: 0, message: '请填写不小于零的期初余额', trigger: 'change' }],
+}
+const entryRules = {
+  entry_date: [{ required: true, message: '请选择日期', trigger: 'change' }],
+  direction: [{ required: true, message: '请选择收支方向', trigger: 'change' }],
+  amount: [{ required: true, type: 'number', min: 0.01, message: '金额必须大于零', trigger: 'change' }],
+  summary: [{ required: true, whitespace: true, message: '请填写摘要', trigger: 'blur' }],
+}
 
 function accountTabLabel(account: CompanyAccount) {
   const label = account.label
-  return account.account_type === 'bank' ? label : `${accountTypeLabels[account.account_type]} · ${label}`
+  return account.account_type === 'bank' ? label : accountTypeLabels[account.account_type] + ' · ' + label
+}
+
+function money(value: number | null | undefined, emptyLabel: string) {
+  return value === null || value === undefined ? emptyLabel : formatMoney(value)
+}
+
+function isEntryDateDisabled(value: Date) {
+  const candidate = [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-')
+  const openingDate = result.value?.opening_balance?.entry_date
+  return candidate > businessToday() || (!!openingDate && candidate < openingDate)
 }
 
 function selectAccount(id: string | number) {
@@ -133,19 +325,14 @@ async function loadAccounts() {
   }
 }
 
-async function loadPayments() {
+async function loadLedger() {
   if (!activeAccountId.value) return
   const request = requests.begin()
   loading.value = true
   loadError.value = false
   result.value = null
   try {
-    const data = await getExpenditure('disbursements', {
-      page: page.value,
-      page_size: pageSize,
-      payment_account_id: activeAccountId.value,
-      date_status: 'confirmed',
-    })
+    const data = await getBankLedger(activeAccountId.value, { page: page.value, page_size: pageSize })
     if (requests.isCurrent(request)) result.value = data
   } catch {
     if (requests.isCurrent(request)) loadError.value = true
@@ -154,7 +341,98 @@ async function loadPayments() {
   }
 }
 
-watch([activeAccountId, page], loadPayments)
+function openOpeningBalance(account: CompanyAccount) {
+  openingTarget.value = account
+  openingForm.entry_date = result.value?.opening_balance?.entry_date || ''
+  openingForm.amount = result.value?.opening_balance?.amount ?? null
+  openingDialogVisible.value = true
+  openingFormRef.value?.clearValidate()
+}
+
+async function saveOpeningBalance() {
+  if (!openingTarget.value || !await openingFormRef.value?.validate().catch(() => false)) return
+  if (openingForm.amount === null || openingForm.amount < 0) return
+  const current = result.value?.opening_balance
+  if (current && (current.entry_date !== openingForm.entry_date || current.amount !== openingForm.amount)) {
+    const confirmed = await ElMessageBox.confirm(
+      '修改期初余额或日期后，该日期之后的账户流水余额会重新计算。',
+      '确认调整期初余额',
+      { type: 'warning', confirmButtonText: '确认保存', cancelButtonText: '取消' },
+    ).then(() => true).catch(() => false)
+    if (!confirmed) return
+  }
+  mutating.value = true
+  try {
+    await setBankLedgerOpeningBalance(openingTarget.value.id, {
+      entry_date: openingForm.entry_date,
+      amount: openingForm.amount,
+    })
+    ElMessage.success('期初余额已保存')
+    openingDialogVisible.value = false
+    page.value = 1
+    await loadLedger()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '保存期初余额失败'))
+  } finally {
+    mutating.value = false
+  }
+}
+
+function openEntry(account: CompanyAccount) {
+  if (!result.value?.opening_balance) {
+    ElMessage.warning('请先设置该账户的期初余额')
+    return
+  }
+  if (!account.is_active) {
+    ElMessage.warning('已停用账户不能登记新流水')
+    return
+  }
+  entryTarget.value = account
+  resetEntryForm()
+  entryDialogVisible.value = true
+  entryFormRef.value?.clearValidate()
+}
+
+function resetEntryForm() {
+  entryForm.request_id = newRequestId()
+  entryForm.entry_date = businessToday()
+  entryForm.direction = 'expense'
+  entryForm.amount = null
+  entryForm.summary = ''
+  entryForm.counterparty_account = ''
+  entryForm.counterparty_name = ''
+  entryForm.category = ''
+  entryForm.project_name = ''
+  entryForm.department = ''
+}
+
+async function submitEntry() {
+  if (!entryTarget.value || !await entryFormRef.value?.validate().catch(() => false)) return
+  if (entryForm.amount === null || entryForm.amount <= 0) return
+  mutating.value = true
+  try {
+    await createBankLedgerEntry(entryTarget.value.id, {
+      ...entryForm,
+      amount: entryForm.amount,
+      summary: entryForm.summary.trim(),
+      counterparty_account: entryForm.counterparty_account.trim() || undefined,
+      counterparty_name: entryForm.counterparty_name.trim() || undefined,
+      category: entryForm.category.trim() || undefined,
+      project_name: entryForm.project_name.trim() || undefined,
+      department: entryForm.department.trim() || undefined,
+    })
+    ElMessage.success('台账流水已登记')
+    entryDialogVisible.value = false
+    page.value = 1
+    await loadLedger()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '登记台账失败'))
+  } finally {
+    mutating.value = false
+  }
+}
+
+watch([activeAccountId, page], loadLedger)
 onMounted(loadAccounts)
 </script>
 
@@ -169,6 +447,19 @@ onMounted(loadAccounts)
   white-space: nowrap;
 }
 .bank-account-status { margin-left: var(--ui-space-2); }
+.bank-ledger-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  margin-bottom: var(--ui-space-4);
+}
+.bank-ledger-buttons { display: flex; flex: 0 0 auto; gap: var(--ui-space-2); }
+.bank-ledger-hint, .bank-ledger-note {
+  margin: 0;
+  color: var(--ui-text-secondary);
+  line-height: 1.6;
+}
 .bank-ledger-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
@@ -187,5 +478,14 @@ onMounted(loadAccounts)
   font-weight: var(--ui-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
-.bank-ledger-note { margin: var(--ui-space-3) 0 0; color: var(--ui-text-secondary); }
+.ledger-summary-cell { display: flex; align-items: center; gap: var(--ui-space-2); min-width: 0; }
+.ledger-summary-cell span { overflow: hidden; text-overflow: ellipsis; }
+.bank-ledger-note { margin-top: var(--ui-space-3); }
+.dialog-note { margin-bottom: var(--ui-space-4); }
+.entry-form :deep(.el-input-number) { width: 100%; }
+@media (max-width: 768px) {
+  .bank-ledger-actions { align-items: flex-start; flex-direction: column; }
+  .bank-ledger-buttons { width: 100%; }
+  .bank-ledger-buttons :deep(.el-button) { flex: 1; }
+}
 </style>

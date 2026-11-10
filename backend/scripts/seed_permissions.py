@@ -143,6 +143,9 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "company_account:read", "name": "查看公司账户", "description": "查看账户档案"},
     {"code": "company_account:manage", "name": "管理公司账户", "description": "新增编辑、启停及删除未使用账户"},
     {"code": "company_account:view_number", "name": "查看完整账号", "description": "查看公司完整账号及开户名称"},
+    {"code": "company_account:ledger_read", "name": "查看账户台账和余额", "description": "查看账户期初余额、完整流水和余额"},
+    {"code": "company_account:ledger_create", "name": "登记账户台账", "description": "登记未接入业务模块的账户收支流水"},
+    {"code": "company_account:opening_balance_set", "name": "设置账户期初余额", "description": "设置或更正账户台账期初余额"},
     {"code": "expense:read", "name": "查看支出", "description": "查看支出记录"},
     {"code": "expense:create", "name": "创建支出", "description": "创建支出记录"},
     {"code": "expense:update", "name": "编辑支出", "description": "编辑支出信息"},
@@ -287,6 +290,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
     ],
     "finance": [
         "company_account:select", "company_account:read", "company_account:manage", "company_account:view_number",
+        "company_account:ledger_read", "company_account:ledger_create", "company_account:opening_balance_set",
         "customer:read",
         "order:read",
         "order:view_price", "order_item:view_price",
@@ -334,7 +338,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager", "manager"]
-PERMISSION_SEED_VERSION = 5
+PERMISSION_SEED_VERSION = 6
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:

@@ -165,6 +165,9 @@ PERM_COMPANY_ACCOUNT_SELECT = "company_account:select"
 PERM_COMPANY_ACCOUNT_READ = "company_account:read"
 PERM_COMPANY_ACCOUNT_MANAGE = "company_account:manage"
 PERM_COMPANY_ACCOUNT_NUMBER = "company_account:view_number"
+PERM_COMPANY_ACCOUNT_LEDGER_READ = "company_account:ledger_read"
+PERM_COMPANY_ACCOUNT_LEDGER_CREATE = "company_account:ledger_create"
+PERM_COMPANY_ACCOUNT_OPENING_BALANCE_SET = "company_account:opening_balance_set"
 
 # Expense
 PERM_EXPENSE_READ = "expense:read"

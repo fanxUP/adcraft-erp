@@ -5,13 +5,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.permissions import require_all_permissions, require_any_permission, require_permission, user_has_permission
+from app.core.permissions import (
+    PERM_COMPANY_ACCOUNT_LEDGER_CREATE,
+    PERM_COMPANY_ACCOUNT_LEDGER_READ,
+    PERM_COMPANY_ACCOUNT_OPENING_BALANCE_SET,
+    require_all_permissions,
+    require_any_permission,
+    require_permission,
+    user_has_permission,
+)
 from app.models.outsource import OutsourcePayment
 from app.models.payable import PayablePayment
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
 from app.schemas.common import error, success
-from app.schemas.company_account import CompanyAccountCreate, CompanyAccountUpdate, PaymentAccountAssignment
+from app.schemas.company_account import (
+    BankLedgerEntryCreate,
+    CompanyAccountCreate,
+    CompanyAccountUpdate,
+    OpeningBalanceSet,
+    PaymentAccountAssignment,
+)
+from app.services.bank_ledger_service import BankLedgerService
 from app.services.company_account_service import CompanyAccountService
 from app.services.operation_log_service import log_operation
 
@@ -62,6 +77,79 @@ async def delete_account(account_id: UUID, request: Request, db: AsyncSession = 
         return error(40001, str(exc))
     await _audit(db, user, request, account_id, "delete", {})
     return success({"deleted": True})
+
+
+@router.get("/{account_id}/ledger")
+async def list_account_ledger(
+    account_id: UUID,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_READ)),
+):
+    try:
+        result = await BankLedgerService(db, user).get_ledger(account_id, page, page_size)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return success(result)
+
+
+@router.put("/{account_id}/opening-balance")
+async def set_account_opening_balance(
+    account_id: UUID,
+    data: OpeningBalanceSet,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_OPENING_BALANCE_SET)),
+):
+    try:
+        entry, before = await BankLedgerService(db, user).set_opening_balance(
+            account_id, data.model_dump(), user.id,
+        )
+    except ValueError as exc:
+        return error(40001, str(exc))
+    after = {"entry_date": entry.entry_date.isoformat(), "amount": float(entry.amount)}
+    await log_operation(
+        db, user.id, user.real_name or user.username, "bank_ledger_entry", entry.id,
+        "update" if before else "create",
+        ip_address=request.client.host if request.client else None,
+        before_data=before,
+        after_data={"account_id": str(account_id), **after},
+    )
+    return success(after)
+
+
+@router.post("/{account_id}/ledger-entries")
+async def create_account_ledger_entry(
+    account_id: UUID,
+    data: BankLedgerEntryCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
+):
+    try:
+        entry, created = await BankLedgerService(db, user).create_entry(
+            account_id, data.model_dump(), user.id,
+        )
+    except ValueError as exc:
+        return error(40001, str(exc))
+    if created:
+        await log_operation(
+            db, user.id, user.real_name or user.username, "bank_ledger_entry", entry.id,
+            "create",
+            ip_address=request.client.host if request.client else None,
+            after_data={
+                "account_id": str(account_id),
+                "entry_date": entry.entry_date.isoformat(),
+                "direction": entry.direction,
+                "amount": float(entry.amount),
+                "summary": entry.summary,
+                "category": entry.category,
+            },
+        )
+    return success(BankLedgerService.entry_payload(entry))
 
 
 @router.put("/assignments/{kind}/{record_id}")

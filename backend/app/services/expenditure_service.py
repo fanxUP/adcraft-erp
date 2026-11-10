@@ -496,3 +496,27 @@ class ExpenditureService:
             rows.append(row)
         return {"items": rows, "total": first["summary_total"], "page": page,
                 "page_size": page_size, "summary": summary, "available_sources": sources}
+
+    async def list_account_cash_payments(self, account_id, *, start_date=None):
+        """Return confirmed cash payments assigned to an account for balance calculation."""
+        if not self.available_sources:
+            raise PermissionError("没有查看该支出来源的权限")
+        table = self._with_payment_accounts(self._disbursements(self._ledger()))
+        conditions = [
+            table.c.payment_account_id == account_id,
+            table.c.date_status == "confirmed",
+            table.c.paid_at.is_not(None),
+        ]
+        if start_date:
+            conditions.append(table.c.paid_at >= datetime.combine(start_date, datetime.min.time()))
+        columns = (
+            "row_key", "source_type", "source_kind", "source_id", "source_no",
+            "project_name", "department", "supplier_name", "category", "description",
+            "amount", "paid_at",
+        )
+        records = (await self.db.execute(
+            select(*(table.c[key] for key in columns))
+            .where(*conditions)
+            .order_by(table.c.paid_at.asc(), table.c.row_key.asc())
+        )).mappings().all()
+        return [dict(record) for record in records]
