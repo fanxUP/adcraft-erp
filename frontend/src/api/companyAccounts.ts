@@ -29,11 +29,24 @@ export interface BankLedgerRow {
   summary: string
   counterparty_account: string | null
   counterparty_name: string | null
+  counterparty_supplier_id?: string | null
   category: string | null
   income_amount: number
   expense_amount: number
   balance: number | null
   project_name: string | null
+  department: string | null
+  order_id?: string | null
+}
+export interface BankLedgerSupplierOption {
+  id: string
+  name: string
+  vendor_no: string
+}
+export interface BankLedgerOrderOption {
+  id: string
+  doc_no: string
+  project_name: string
   department: string | null
 }
 export interface BankLedgerResult {
@@ -58,10 +71,16 @@ export interface BankLedgerEntryCreate {
   summary: string
   counterparty_account?: string
   counterparty_name?: string
+  counterparty_supplier_id?: string
   category?: string
   project_name?: string
   department?: string
+  order_id?: string
 }
+export const getBankLedgerSupplierOptions = (keyword?: string) =>
+  get<BankLedgerSupplierOption[]>('/company-accounts/ledger-options/suppliers', { params: keyword ? { keyword } : undefined })
+export const getBankLedgerOrderOptions = (keyword?: string) =>
+  get<BankLedgerOrderOption[]>('/company-accounts/ledger-options/orders', { params: keyword ? { keyword } : undefined })
 export const getBankLedger = (accountId: string, params?: { page?: number; page_size?: number }) =>
   get<BankLedgerResult>('/company-accounts/' + accountId + '/ledger', { params })
 export const setBankLedgerOpeningBalance = (

@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,7 +14,8 @@ from app.core.permissions import (
     require_permission,
     user_has_permission,
 )
-from app.models.outsource import OutsourcePayment
+from app.models.business_document import BusinessDocument
+from app.models.outsource import OutsourcePayment, OutsourceVendor
 from app.models.payable import PayablePayment
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
@@ -47,6 +48,57 @@ async def options(include_inactive: bool = False, db: AsyncSession = Depends(get
 @router.get("/")
 async def list_accounts(db: AsyncSession = Depends(get_db), user=Depends(require_permission("company_account:read"))):
     return success(await CompanyAccountService(db).list_accounts(full=user_has_permission(user, "company_account:view_number")))
+
+
+@router.get("/ledger-options/suppliers")
+async def bank_ledger_supplier_options(
+    keyword: str | None = Query(default=None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
+):
+    query = select(OutsourceVendor).where(
+        OutsourceVendor.deleted_at.is_(None),
+        OutsourceVendor.is_active.is_(True),
+    )
+    if keyword and keyword.strip():
+        search = f"%{keyword.strip()}%"
+        query = query.where(or_(
+            OutsourceVendor.name.ilike(search),
+            OutsourceVendor.short_name.ilike(search),
+            OutsourceVendor.vendor_no.ilike(search),
+        ))
+    suppliers = (await db.execute(
+        query.order_by(OutsourceVendor.name.asc(), OutsourceVendor.vendor_no.asc()).limit(50)
+    )).scalars().all()
+    return success([{"id": str(item.id), "name": item.name, "vendor_no": item.vendor_no} for item in suppliers])
+
+
+@router.get("/ledger-options/orders")
+async def bank_ledger_order_options(
+    keyword: str | None = Query(default=None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
+):
+    query = select(BusinessDocument).where(
+        BusinessDocument.doc_type == "order",
+        BusinessDocument.deleted_at.is_(None),
+    )
+    if keyword and keyword.strip():
+        search = f"%{keyword.strip()}%"
+        query = query.where(or_(
+            BusinessDocument.doc_no.ilike(search),
+            BusinessDocument.project_name.ilike(search),
+            BusinessDocument.department.ilike(search),
+        ))
+    orders = (await db.execute(
+        query.order_by(BusinessDocument.order_date.desc().nullslast(), BusinessDocument.created_at.desc()).limit(50)
+    )).scalars().all()
+    return success([{
+        "id": str(item.id),
+        "doc_no": item.doc_no,
+        "project_name": item.project_name,
+        "department": item.department,
+    } for item in orders])
 
 
 @router.post("/")
@@ -147,6 +199,8 @@ async def create_account_ledger_entry(
                 "amount": float(entry.amount),
                 "summary": entry.summary,
                 "category": entry.category,
+                "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
+                "order_id": str(entry.order_id) if entry.order_id else None,
             },
         )
     return success(BankLedgerService.entry_payload(entry))

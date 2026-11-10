@@ -27,6 +27,8 @@ class BankLedgerEntry(Base, TimestampMixin):
             name="ck_bank_ledger_amount_and_direction",
         ),
         Index("ix_bank_ledger_account_date", "account_id", "entry_date"),
+        Index("ix_bank_ledger_supplier_id", "counterparty_supplier_id"),
+        Index("ix_bank_ledger_order_id", "order_id"),
         Index(
             "uq_bank_ledger_opening_per_account",
             "account_id",
@@ -45,10 +47,16 @@ class BankLedgerEntry(Base, TimestampMixin):
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     counterparty_account: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    counterparty_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    counterparty_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    counterparty_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("outsource_vendors.id", ondelete="SET NULL"), nullable=True
+    )
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     project_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id", ondelete="SET NULL"), nullable=True
+    )
     request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -6,8 +6,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, select, text
 
+from app.models.business_document import BusinessDocument
 from app.models.bank_ledger import BankLedgerEntry
 from app.models.company_account import CompanyAccount
+from app.models.outsource import OutsourceVendor
 from app.services.expenditure_service import ExpenditureService
 
 SUPPORTED_ACCOUNT_TYPES = {"bank", "wechat", "alipay"}
@@ -106,12 +108,14 @@ class BankLedgerService:
                 "summary": entry.summary,
                 "counterparty_account": entry.counterparty_account,
                 "counterparty_name": entry.counterparty_name,
+                "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
                 "category": entry.category,
                 "income_amount": amount if is_income else MONEY_ZERO,
                 "expense_amount": MONEY_ZERO if is_income else amount,
                 "balance": None,
                 "project_name": entry.project_name,
                 "department": entry.department,
+                "order_id": str(entry.order_id) if entry.order_id else None,
                 "_sort": (
                     entry.entry_date,
                     2,
@@ -264,6 +268,30 @@ class BankLedgerService:
                 values[key] = None
         if not values.get("summary"):
             raise ValueError("摘要不能为空")
+
+        supplier_id = values.get("counterparty_supplier_id")
+        if supplier_id:
+            supplier = await self.db.scalar(select(OutsourceVendor).where(
+                OutsourceVendor.id == supplier_id,
+                OutsourceVendor.deleted_at.is_(None),
+                OutsourceVendor.is_active.is_(True),
+            ))
+            if supplier is None:
+                raise ValueError("供应商不存在或已停用，请重新选择")
+            values["counterparty_name"] = supplier.name
+
+        order_id = values.get("order_id")
+        if order_id:
+            order = await self.db.scalar(select(BusinessDocument).where(
+                BusinessDocument.id == order_id,
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.deleted_at.is_(None),
+            ))
+            if order is None:
+                raise ValueError("订单不存在或已删除，请重新选择")
+            values["project_name"] = order.project_name
+            values["department"] = order.department
+
         entry = BankLedgerEntry(
             account_id=account.id,
             entry_type="manual",
@@ -273,9 +301,11 @@ class BankLedgerService:
             summary=values["summary"],
             counterparty_account=values.get("counterparty_account"),
             counterparty_name=values.get("counterparty_name"),
+            counterparty_supplier_id=supplier_id,
             category=values.get("category"),
             project_name=values.get("project_name"),
             department=values.get("department"),
+            order_id=order_id,
             request_id=request_id,
             created_by=created_by,
         )
@@ -293,4 +323,6 @@ class BankLedgerService:
             "entry_date": entry.entry_date.isoformat(),
             "amount": BankLedgerService._amount_value(entry.amount),
             "summary": entry.summary,
+            "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
+            "order_id": str(entry.order_id) if entry.order_id else None,
         }

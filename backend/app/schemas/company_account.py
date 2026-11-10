@@ -44,7 +44,9 @@ class BankLedgerEntryCreate(BaseModel):
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     summary: str = Field(min_length=1, max_length=255)
     counterparty_account: str | None = Field(default=None, max_length=200)
-    counterparty_name: str | None = Field(default=None, max_length=200)
+    counterparty_name: str | None = Field(default=None, max_length=255)
+    counterparty_supplier_id: UUID | None = None
     category: str | None = Field(default=None, max_length=64)
     project_name: str | None = Field(default=None, max_length=255)
     department: str | None = Field(default=None, max_length=255)
+    order_id: UUID | None = None

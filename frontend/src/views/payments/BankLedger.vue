@@ -191,7 +191,26 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item label="对方户名">
-              <el-input v-model="entryForm.counterparty_name" maxlength="200" />
+              <el-autocomplete
+                v-model="entryForm.counterparty_name"
+                :fetch-suggestions="fetchSupplierSuggestions"
+                :trigger-on-focus="false"
+                :debounce="250"
+                clearable
+                maxlength="255"
+                placeholder="搜索并选择供应商，或直接输入户名"
+                style="width: 100%"
+                @input="handleCounterpartyNameInput"
+                @select="selectSupplier"
+              >
+                <template #default="{ item }">
+                  <div class="supplier-option">
+                    <span>{{ item.name }}</span>
+                    <span>{{ item.vendor_no }}</span>
+                  </div>
+                </template>
+              </el-autocomplete>
+              <div class="form-hint">选择供应商可建立关联；直接输入的户名按自定义文本保存。</div>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
@@ -201,14 +220,37 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
+          <el-col :span="24">
+            <el-form-item label="关联订单">
+              <el-select
+                v-model="entryForm.order_id"
+                filterable
+                remote
+                clearable
+                :remote-method="searchOrderOptions"
+                :loading="ordersLoading"
+                placeholder="搜索订单编号或项目名称（可选）"
+                style="width: 100%"
+                @change="selectOrder"
+              >
+                <el-option v-for="order in orderOptions" :key="order.id" :label="`${order.doc_no} · ${order.project_name}`" :value="order.id">
+                  <div class="order-option">
+                    <strong>{{ order.doc_no }}</strong>
+                    <span>{{ order.project_name }} · {{ order.department || '未设置部门/科室' }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+              <div class="form-hint">选择订单后自动带入项目和部门/科室；清空订单后可手动填写。</div>
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item label="项目">
-              <el-input v-model="entryForm.project_name" maxlength="255" />
+              <el-input v-model="entryForm.project_name" maxlength="255" :disabled="!!entryForm.order_id" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item label="部门/科室">
-              <el-input v-model="entryForm.department" maxlength="255" />
+              <el-input v-model="entryForm.department" maxlength="255" :disabled="!!entryForm.order_id" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -228,9 +270,13 @@ import {
   accountTypeLabels,
   createBankLedgerEntry,
   getBankLedger,
+  getBankLedgerOrderOptions,
+  getBankLedgerSupplierOptions,
   getCompanyAccountOptions,
   setBankLedgerOpeningBalance,
   type BankLedgerResult,
+  type BankLedgerOrderOption,
+  type BankLedgerSupplierOption,
   type CompanyAccount,
 } from '@/api/companyAccounts'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
@@ -273,10 +319,16 @@ const entryForm = reactive({
   summary: '',
   counterparty_account: '',
   counterparty_name: '',
+  counterparty_supplier_id: '',
   category: '',
   project_name: '',
   department: '',
+  order_id: '',
 })
+const selectedSupplierName = ref('')
+const ordersLoading = ref(false)
+const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
+let orderSearchSequence = 0
 const categoryOptions = computed(() => entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
 const openingRules = {
   entry_date: [{ required: true, message: '请选择期初日期', trigger: 'change' }],
@@ -401,9 +453,64 @@ function resetEntryForm() {
   entryForm.summary = ''
   entryForm.counterparty_account = ''
   entryForm.counterparty_name = ''
+  entryForm.counterparty_supplier_id = ''
+  selectedSupplierName.value = ''
   entryForm.category = ''
   entryForm.project_name = ''
   entryForm.department = ''
+  entryForm.order_id = ''
+  orderOptions.value = []
+}
+
+async function fetchSupplierSuggestions(query: string, callback: (items: Array<BankLedgerSupplierOption & { value: string }>) => void) {
+  try {
+    const suppliers = await getBankLedgerSupplierOptions(query.trim() || undefined)
+    callback(suppliers.map(supplier => ({ ...supplier, value: supplier.name })))
+  } catch {
+    callback([])
+  }
+}
+
+function selectSupplier(item: BankLedgerSupplierOption) {
+  entryForm.counterparty_name = item.name
+  entryForm.counterparty_supplier_id = item.id
+  selectedSupplierName.value = item.name
+}
+
+function handleCounterpartyNameInput(value: string) {
+  if (entryForm.counterparty_supplier_id && value !== selectedSupplierName.value) {
+    entryForm.counterparty_supplier_id = ''
+    selectedSupplierName.value = ''
+  }
+}
+
+async function searchOrderOptions(keyword: string) {
+  const sequence = ++orderSearchSequence
+  ordersLoading.value = true
+  try {
+    const orders = await getBankLedgerOrderOptions(keyword.trim() || undefined)
+    if (sequence !== orderSearchSequence) return
+    const selectedOrder = orderOptions.value.find(order => order.id === entryForm.order_id)
+    orderOptions.value = selectedOrder && !orders.some(order => order.id === selectedOrder.id)
+      ? [selectedOrder, ...orders]
+      : orders
+  } catch {
+    if (sequence === orderSearchSequence) orderOptions.value = orderOptions.value.filter(order => order.id === entryForm.order_id)
+  } finally {
+    if (sequence === orderSearchSequence) ordersLoading.value = false
+  }
+}
+
+function selectOrder(orderId: string | undefined) {
+  if (!orderId) {
+    entryForm.project_name = ''
+    entryForm.department = ''
+    return
+  }
+  const order = orderOptions.value.find(item => item.id === orderId)
+  if (!order) return
+  entryForm.project_name = order.project_name
+  entryForm.department = order.department || ''
 }
 
 async function submitEntry() {
@@ -417,9 +524,11 @@ async function submitEntry() {
       summary: entryForm.summary.trim(),
       counterparty_account: entryForm.counterparty_account.trim() || undefined,
       counterparty_name: entryForm.counterparty_name.trim() || undefined,
+      counterparty_supplier_id: entryForm.counterparty_supplier_id || undefined,
       category: entryForm.category.trim() || undefined,
       project_name: entryForm.project_name.trim() || undefined,
       department: entryForm.department.trim() || undefined,
+      order_id: entryForm.order_id || undefined,
     })
     ElMessage.success('台账流水已登记')
     entryDialogVisible.value = false
@@ -483,6 +592,24 @@ onMounted(loadAccounts)
 .bank-ledger-note { margin-top: var(--ui-space-3); }
 .dialog-note { margin-bottom: var(--ui-space-4); }
 .entry-form :deep(.el-input-number) { width: 100%; }
+.form-hint {
+  margin-top: var(--ui-space-1);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.supplier-option, .order-option {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  min-width: 0;
+}
+.supplier-option span:last-child, .order-option span {
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media (max-width: 768px) {
   .bank-ledger-actions { align-items: flex-start; flex-direction: column; }
   .bank-ledger-buttons { width: 100%; }
