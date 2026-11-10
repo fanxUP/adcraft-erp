@@ -1,27 +1,27 @@
 <template>
   <AppPage>
     <template #header>
-      <PageHeader title="银行台账" description="按银行账户查看已登记且有付款日期的支出。" />
+      <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看已登记且有付款日期的支出。" />
     </template>
 
-    <StatePanel v-if="accountsLoading" state="loading" title="正在加载银行账户" />
+    <StatePanel v-if="accountsLoading" state="loading" title="正在加载账户" />
     <StatePanel
       v-else-if="accountsError"
       state="error"
-      title="银行账户加载失败"
+      title="账户加载失败"
       action-label="重试"
       @action="loadAccounts"
     />
-    <StatePanel v-else-if="!accounts.length" title="暂无银行账户" description="请先在公司账户中登记银行账户。">
+    <StatePanel v-else-if="!accounts.length" title="暂无可用账户" description="请先在公司账户中登记银行、微信或支付宝账户。">
       <template #actions>
         <router-link :to="{ name: 'CompanyAccountList' }">查看公司账户</router-link>
       </template>
     </StatePanel>
 
-    <el-tabs v-else :model-value="activeAccountId" class="bank-account-tabs" aria-label="银行账户" @update:model-value="selectAccount">
+    <el-tabs v-else :model-value="activeAccountId" class="bank-account-tabs" aria-label="资金账户" @update:model-value="selectAccount">
       <el-tab-pane v-for="account in accounts" :key="account.id" :name="account.id" lazy>
         <template #label>
-          <span class="bank-account-label" :title="account.label">{{ account.label }}</span>
+          <span class="bank-account-label" :title="accountTabLabel(account)">{{ accountTabLabel(account) }}</span>
           <el-tag v-if="!account.is_active" class="bank-account-status" type="info" size="small">已停用</el-tag>
         </template>
 
@@ -90,7 +90,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, shallowRef, watch } from 'vue'
-import { getCompanyAccountOptions, type CompanyAccount } from '@/api/companyAccounts'
+import { accountTypeLabels, getCompanyAccountOptions, type CompanyAccount } from '@/api/companyAccounts'
 import { getExpenditure, type ExpenditureResult } from '@/api/payments'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { expenditureCategoryLabel, expenditureDateLabel, latestRequest } from '@/utils/expenditure'
@@ -107,6 +107,11 @@ const loading = ref(false)
 const loadError = ref(false)
 const requests = latestRequest()
 
+function accountTabLabel(account: CompanyAccount) {
+  const label = account.label
+  return account.account_type === 'bank' ? label : `${accountTypeLabels[account.account_type]} · ${label}`
+}
+
 function selectAccount(id: string | number) {
   page.value = 1
   activeAccountId.value = String(id)
@@ -116,7 +121,9 @@ async function loadAccounts() {
   accountsLoading.value = true
   accountsError.value = false
   try {
-    accounts.value = (await getCompanyAccountOptions()).filter(account => account.account_type === 'bank')
+    accounts.value = (await getCompanyAccountOptions()).filter(account =>
+      ['bank', 'wechat', 'alipay'].includes(account.account_type),
+    )
     const firstAccount = accounts.value.find(account => account.is_active) ?? accounts.value[0]
     if (firstAccount) selectAccount(firstAccount.id)
   } catch {
