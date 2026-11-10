@@ -147,7 +147,7 @@ def test_permanent_outsource_delete_is_sensitive_and_admin_only_by_default():
         for role in ROLE_PERMISSION_MAP
         if role != "admin"
     )
-    assert PERMISSION_SEED_VERSION == 5
+    assert PERMISSION_SEED_VERSION == 6
 
 
 def test_unrelated_custom_roles_can_be_combined_without_role_name_rules():

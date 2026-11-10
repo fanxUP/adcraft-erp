@@ -1,6 +1,6 @@
 """Account invariants and real PostgreSQL payment attribution checks."""
 import os
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -12,14 +12,19 @@ from sqlalchemy import func, insert, select, update
 from app.api.company_accounts import router
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.bank_ledger import BankLedgerEntry
+from app.models.business_document import BusinessDocument
 from app.models.company_account import CompanyAccount
-from app.models.payment import Expense
+from app.models.contract import Contract, ContractDocument
+from app.models.customer import Customer
+from app.models.payment import Expense, Payment, PaymentAllocation
 from app.models.project_cost import ProjectCost
 from app.services.company_account_service import CompanyAccountService
+from app.services.bank_ledger_service import BankLedgerService
 from app.services.expenditure_service import ExpenditureFilters
 from app.services.outsource_service import OutsourceService
 from app.services.payable_service import PayableService
-from app.services.payment_service import ExpenseService
+from app.services.payment_service import ExpenseService, PaymentService
 from app.services.project_cost_service import ProjectCostService
 from tests.test_expenditure_integration import fixture_db  # noqa: F401
 from tests.test_expenditure_service import viewer
@@ -88,6 +93,146 @@ async def test_initial_then_partial_payments_partition_without_changing_source_t
     after = await expenditure.list_records("disbursements", filters=ExpenditureFilters(payment_account_id=UUID(later["id"])))
     assert after["total"] == 0
     assert (await db.get(Expense, source_id)).amount == Decimal("1000.00")
+
+
+async def test_outstanding_payables_excludes_fully_paid_and_keeps_partial_sources(fixture_db):
+    db, _, _ = fixture_db
+    account = await cash(db, "应付测试账户")
+    expense_service = ExpenseService(db)
+    payable_service = PayableService(db)
+    unpaid = await expense_service.create_expense({"paid_amount": 0, "payable_amount": 80}, None)
+    partial = await expense_service.create_expense({
+        "paid_amount": 20, "payable_amount": 80,
+        "payment_account_id": account["id"], "expense_date": "2026-10-01",
+    }, None)
+    paid = await expense_service.create_expense({"paid_amount": 0, "payable_amount": 30}, None)
+    await payable_service.register_payment("expense", UUID(paid["id"]), {
+        "request_id": uuid4(), "amount": 30, "payment_account_id": account["id"],
+        "paid_at": "2026-10-02",
+    }, None)
+
+    rows, total = await payable_service.list_payables(1, 200, status="outstanding")
+    ids = {row["source_id"] for row in rows}
+    assert total == len(rows)
+    assert unpaid["id"] in ids
+    assert partial["id"] in ids
+    assert paid["id"] not in ids
+    assert next(row for row in rows if row["source_id"] == partial["id"])["remaining_amount"] == 80
+
+
+async def test_partial_expense_appears_as_cash_payment_and_outstanding_balance(fixture_db):
+    db, expenditure, _ = fixture_db
+    bank = await CompanyAccountService(db).save({
+        "name": "分类测试银行户", "account_type": "bank", "holder_name": "测试公司",
+        "bank_name": "测试银行", "account_number": "1234567890123456", "is_active": True,
+    }, full=True)
+    ledger = BankLedgerService(db, expenditure.viewer)
+    await ledger.set_opening_balance(UUID(bank["id"]), {"entry_date": datetime(2026, 9, 1).date(), "amount": 0}, None)
+    expense = await ExpenseService(db).create_expense({
+        "paid_amount": 300, "payable_amount": 700, "payment_account_id": bank["id"],
+        "expense_date": "2026-10-01", "category": "材料采购",
+    }, None)
+
+    cash = await ledger.get_ledger(UUID(bank["id"]))
+    payment = next(row for row in cash["items"] if row.get("source_id") == expense["id"])
+    payable = await PayableService(db).get_payable("expense", UUID(expense["id"]))
+    assert payment["source_label"] == "费用付款"
+    assert payment["expense_amount"] == 300
+    assert payment["balance"] == -300
+    assert payable["remaining_amount"] == 700
+
+
+@pytest.mark.parametrize("has_contract", [True, False])
+async def test_bank_business_registration_updates_ledger_costs_and_receivables(fixture_db, has_contract):
+    db, _, ids = fixture_db
+    account = await CompanyAccountService(db).save({
+        "name": "台账测试微信户", "account_type": "wechat", "account_number": "wechat-test",
+    })
+    account_id = UUID(account["id"])
+    customer = Customer(customer_no="TEST-CUSTOMER", name="验收客户")
+    db.add(customer)
+    await db.flush()
+    await db.execute(update(BusinessDocument).where(BusinessDocument.id == ids["doc"]).values(
+        customer_id=customer.id, total_amount=500, unpaid_amount=500,
+    ))
+    if has_contract:
+        contract = Contract(contract_no="TEST-CONTRACT", customer_id=customer.id, customer_name=customer.name,
+                            project_name="测试项目", total_amount=500, unpaid_amount=500)
+        db.add(contract)
+        await db.flush()
+        db.add(ContractDocument(contract_id=contract.id, document_id=ids["doc"]))
+        await db.flush()
+
+    app = FastAPI()
+    app.include_router(router)
+    current = viewer(
+        "company_account:ledger_create", "company_account:ledger_read", "company_account:select", "company_account:read",
+        "expense:read", "expense:create", "finance:view_cost",
+        "outsource_center:read", "outsource_task:read", "outsource_payment:read",
+    )
+    current.id, current.username, current.real_name = None, "测试", "测试"
+    app.dependency_overrides[get_current_user] = lambda: current
+
+    async def database():
+        yield db
+
+    app.dependency_overrides[get_db] = database
+    ledger = BankLedgerService(db, current)
+    await ledger.set_opening_balance(account_id, {"entry_date": date(2026, 9, 1), "amount": 1000}, None)
+    prefix = f"/company-accounts/{account_id}"
+    common = {"order_id": str(ids["doc"]), "entry_date": "2026-09-02"}
+    cost_data = {**common, "request_id": str(uuid4()), "amount": 80.15, "summary": "采购纸张",
+                 "category": "材料费", "supplier_id": str(ids["vendor"])}
+    receipt_data = {**common, "request_id": str(uuid4()), "amount": 120.25, "summary": "首笔回款"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        denied = await client.post(f"{prefix}/customer-receipts", json=receipt_data)
+        assert denied.status_code == 403
+        current.roles[0].permissions.extend(viewer("payment:create", "payment:read").roles[0].permissions)
+
+        async def post(endpoint, payload):
+            response = await client.post(f"{prefix}/{endpoint}", json=payload)
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        cost = await post("project-cost-payments", cost_data)
+        assert cost["code"] == 0, cost
+        assert await post("project-cost-payments", cost_data) == cost
+        assert (await post("project-cost-payments", {**cost_data, "amount": 81}))["code"] != 0
+        assert (await post("customer-receipts", {**receipt_data, "amount": 501}))["code"] != 0
+        receipt = await post("customer-receipts", receipt_data)
+        assert receipt["code"] == 0, receipt
+        assert await post("customer-receipts", receipt_data) == receipt
+
+    cost_id, payment_id = UUID(cost["data"]["id"]), UUID(receipt["data"]["id"])
+    new_cost = await db.get(ProjectCost, cost_id)
+    assert (new_cost.document_id, new_cost.amount, new_cost.debt_amount) == (ids["doc"], Decimal("80.15"), 0)
+    assert new_cost.supplier_id == ids["vendor"]
+    order = await db.get(BusinessDocument, ids["doc"])
+    assert (order.paid_amount, order.unpaid_amount, order.cost_amount) == (
+        Decimal("120.25"), Decimal("379.75"), Decimal("12080.15"),
+    )
+    allocations = await db.scalar(select(func.count()).select_from(PaymentAllocation).where(PaymentAllocation.payment_id == payment_id))
+    assert allocations == int(has_contract)
+    if has_contract:
+        await db.refresh(contract)
+        assert (contract.paid_amount, contract.unpaid_amount) == (Decimal("120.25"), Decimal("379.75"))
+    assert await db.scalar(select(func.count()).select_from(Payment)) == 1
+    assert await db.scalar(select(func.count()).select_from(BankLedgerEntry)) == 1  # Opening balance only.
+    before_void = await ledger.get_ledger(account_id)
+    assert before_void["summary"] == {
+        "opening_balance": 1000, "income_amount": 120.25, "expense_amount": 80.15,
+        "balance": 1040.10, "transaction_count": 2,
+    }
+    assert {row["summary"] for row in before_void["items"]} == {"期初余额", "采购纸张", "首笔回款"}
+    limited_ledger = await BankLedgerService(db, viewer("expense:read")).get_ledger(account_id)
+    assert limited_ledger["summary"] == before_void["summary"]
+    hidden_receipt = next(row for row in limited_ledger["items"] if row["entry_type"] == "source_receipt")
+    assert hidden_receipt["document_id"] is None and hidden_receipt["counterparty_name"] is None
+
+    await PaymentService(db).void_payment(payment_id, "重复收款凭据")
+    await db.refresh(order)
+    assert order.unpaid_amount == 500
+    assert (await ledger.get_ledger(account_id))["summary"]["balance"] == 919.85
 
 
 async def test_new_cash_requires_account_but_all_unpaid_and_historical_notes_remain_valid(fixture_db):

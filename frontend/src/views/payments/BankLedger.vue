@@ -4,6 +4,15 @@
       <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看收支流水与账面余额。" />
     </template>
 
+    <el-tabs v-model="activeSection" aria-label="银行台账分类" class="bank-ledger-sections">
+      <el-tab-pane v-if="canReadAccounts" label="账户流水" name="accounts" />
+      <el-tab-pane v-if="canReadPayments" label="付款记录" name="payments" />
+      <el-tab-pane v-if="canReadPayments" label="待归户付款" name="unassigned" />
+      <el-tab-pane v-if="canReadPayments" label="日期待核实" name="undated" />
+    </el-tabs>
+
+    <template v-if="activeSection === 'accounts'">
+
     <StatePanel v-if="accountsLoading" state="loading" title="正在加载账户" />
     <StatePanel
       v-else-if="accountsError"
@@ -28,10 +37,15 @@
         <template v-if="account.id === activeAccountId">
           <div class="bank-ledger-actions">
             <p class="bank-ledger-hint">
-              期初日期为账本起始日；该日期及之后的 ERP 付款和手工流水会参与余额计算。
+              期初日期及之后，归属此账户的业务收款、付款及手工流水参与余额计算。
             </p>
             <div class="bank-ledger-buttons">
               <el-button v-if="canSetOpeningBalance" :disabled="loading || !result" @click="openOpeningBalance(account)">期初余额</el-button>
+              <el-button
+                v-if="auth.can('expense:create')"
+                :disabled="loading || !result?.opening_balance || !account.is_active"
+                @click="openExpenseCreate(account)"
+              >登记费用付款</el-button>
               <el-tooltip
                 v-if="canCreateEntry && (!result?.opening_balance || !account.is_active)"
                 :content="!account.is_active ? '停用账户不能登记新流水' : '请先设置期初余额后登记流水'"
@@ -93,6 +107,12 @@
               <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.department || '—' }}</template>
               </el-table-column>
+              <el-table-column label="操作" width="105" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
               <template #empty>
                 <StatePanel v-if="loading" state="loading" title="正在加载账户流水" />
                 <StatePanel v-else-if="loadError" state="error" title="账户流水加载失败" action-label="重试" @action="loadLedger" />
@@ -110,11 +130,35 @@
             </template>
           </DataTableShell>
           <p class="bank-ledger-note">
-            ERP 已确认且已关联此账户的支出付款会自动列入。客户收款尚未关联公司账户时不会自动出现；手工登记只补录资金台账，不改变订单收款或支出业务金额。请勿重复登记已在 ERP 付款记录中列出的款项。
+            已归属此账户的业务收付款会自动列入。登记前请先核对账户流水，避免重复入账。
           </p>
         </template>
       </el-tab-pane>
     </el-tabs>
+    </template>
+
+    <section v-else-if="canReadPayments" aria-label="待核对付款">
+      <el-alert
+        v-if="activeSection === 'payments'"
+        title="按实际付款流水查看费用、项目成本和外协付款，包含现金及其他公司账户；各银行账户余额仍以账户流水为准。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-alert
+        v-else
+        :title="activeSection === 'unassigned' ? '这些已付款尚未关联公司账户，不参与账户余额计算。补录付款账户后会进入对应账户。' : '这些历史已付款缺少可核实的日期，不参与账户余额计算。核实实际付款日期后会进入对应账户。'"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <ExpenditureTable
+        view="disbursements"
+        :refresh-key="0"
+        :payment-queue="activeSection === 'unassigned' ? 'unassigned' : activeSection === 'undated' ? 'undated' : undefined"
+        @manage-expense="openExpenseSource"
+      />
+    </section>
 
     <el-dialog
       v-model="openingDialogVisible"
@@ -151,18 +195,25 @@
     >
       <el-alert
         class="dialog-note"
-        type="warning"
+        :type="entryPurpose === 'manual' ? 'warning' : 'info'"
         :closable="false"
-        title="仅登记尚未在 ERP 付款记录中入账的收支。手工流水不会更新订单、支出或应付业务数据。"
+        :title="entryPurposeHint"
       />
       <el-form ref="entryFormRef" :model="entryForm" :rules="entryRules" label-position="top" class="entry-form">
+        <el-form-item label="登记类型" required>
+          <el-select v-model="entryPurpose" style="width: 100%" @change="resetEntryPurposeFields">
+            <el-option label="手工收支" value="manual" />
+            <el-option v-if="canCreateProjectCost" label="项目成本付款" value="project_cost" />
+            <el-option v-if="canCreateReceipt" label="客户收款" value="receipt" />
+          </el-select>
+        </el-form-item>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
-            <el-form-item label="日期" prop="entry_date" required>
+            <el-form-item :label="entryPurpose === 'receipt' ? '收款日期' : entryPurpose === 'project_cost' ? '付款日期' : '日期'" prop="entry_date" required>
               <el-date-picker v-model="entryForm.entry_date" type="date" value-format="YYYY-MM-DD" :clearable="false" :disabled-date="isEntryDateDisabled" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
+          <el-col v-if="entryPurpose === 'manual'" :xs="24" :sm="12">
             <el-form-item label="收支方向" prop="direction" required>
               <el-select v-model="entryForm.direction" style="width: 100%">
                 <el-option label="收入" value="income" />
@@ -177,8 +228,8 @@
               <el-input-number v-model="entryForm.amount" :min="0.01" :precision="2" :controls="false" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item label="分类" prop="category">
+          <el-col v-if="entryPurpose !== 'receipt'" :xs="24" :sm="12">
+            <el-form-item label="分类" prop="category" :required="entryPurpose === 'project_cost'" :rules="entryPurpose === 'project_cost' ? categoryRules : []">
               <el-select v-model="entryForm.category" filterable allow-create default-first-option clearable placeholder="选择或填写分类" style="width: 100%">
                 <el-option v-for="category in categoryOptions" :key="category" :label="category" :value="category" />
               </el-select>
@@ -188,7 +239,7 @@
         <el-form-item label="摘要" prop="summary" required>
           <el-input v-model="entryForm.summary" maxlength="255" placeholder="例如：银行利息、账户手续费" />
         </el-form-item>
-        <el-row :gutter="16">
+        <el-row v-if="entryPurpose !== 'receipt'" :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item label="对方户名">
               <el-autocomplete
@@ -197,7 +248,7 @@
                 :trigger-on-focus="false"
                 :debounce="250"
                 clearable
-                maxlength="255"
+                :maxlength="entryPurpose === 'project_cost' ? 200 : 255"
                 placeholder="搜索并选择供应商，或直接输入户名"
                 style="width: 100%"
                 @input="handleCounterpartyNameInput"
@@ -213,7 +264,7 @@
               <div class="form-hint">选择供应商可建立关联；直接输入的户名按自定义文本保存。</div>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
+          <el-col v-if="entryPurpose === 'manual'" :xs="24" :sm="12">
             <el-form-item label="对方账号">
               <el-input v-model="entryForm.counterparty_account" maxlength="200" />
             </el-form-item>
@@ -221,7 +272,7 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :span="24">
-            <el-form-item label="关联订单">
+            <el-form-item label="关联订单" prop="order_id" :required="entryPurpose !== 'manual'" :rules="entryPurpose === 'manual' ? [] : orderRules">
               <el-select
                 v-model="entryForm.order_id"
                 filterable
@@ -229,9 +280,10 @@
                 clearable
                 :remote-method="searchOrderOptions"
                 :loading="ordersLoading"
-                placeholder="搜索订单编号或项目名称（可选）"
+                placeholder="搜索订单编号或项目名称"
                 style="width: 100%"
                 @change="selectOrder"
+                @visible-change="open => { if (open && !orderOptions.length) void searchOrderOptions('') }"
               >
                 <el-option v-for="order in orderOptions" :key="order.id" :label="`${order.doc_no} · ${order.project_name}`" :value="order.id">
                   <div class="order-option">
@@ -240,15 +292,15 @@
                   </div>
                 </el-option>
               </el-select>
-              <div class="form-hint">选择订单后自动带入项目和部门/科室；清空订单后可手动填写。</div>
+              <div class="form-hint">{{ entryPurpose === 'manual' ? '选择订单后自动带入项目和部门/科室。' : '项目和部门/科室由所选订单带入。' }}</div>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
+          <el-col v-if="entryPurpose === 'manual'" :xs="24" :sm="12">
             <el-form-item label="项目">
               <el-input v-model="entryForm.project_name" maxlength="255" :disabled="!!entryForm.order_id" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
+          <el-col v-if="entryPurpose === 'manual'" :xs="24" :sm="12">
             <el-form-item label="部门/科室">
               <el-input v-model="entryForm.department" maxlength="255" :disabled="!!entryForm.order_id" />
             </el-form-item>
@@ -257,7 +309,7 @@
       </el-form>
       <template #footer>
         <el-button @click="entryDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitEntry">登记流水</el-button>
+        <el-button type="primary" :loading="mutating" @click="submitEntry">{{ entryPurpose === 'receipt' ? '登记收款' : entryPurpose === 'project_cost' ? '登记付款' : '登记流水' }}</el-button>
       </template>
     </el-dialog>
   </AppPage>
@@ -265,10 +317,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   accountTypeLabels,
+  createBankCustomerReceipt,
   createBankLedgerEntry,
+  createBankProjectCost,
   getBankLedger,
   getBankLedgerOrderOptions,
   getBankLedgerSupplierOptions,
@@ -276,8 +331,10 @@ import {
   setBankLedgerOpeningBalance,
   type BankLedgerResult,
   type BankLedgerOrderOption,
+  type BankLedgerPurpose,
   type BankLedgerSupplierOption,
   type CompanyAccount,
+  type BankLedgerRow,
 } from '@/api/companyAccounts'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -285,13 +342,51 @@ import { businessToday } from '@/utils/datetime'
 import { getErrorMessage } from '@/utils/error'
 import { newRequestId } from '@/utils/requestId'
 import { latestRequest } from '@/utils/expenditure'
+import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
+import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const EXPENSE_CATEGORIES = ['手续费', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他支出']
-const INCOME_CATEGORIES = ['客户收款（台账补录）', '利息收入', '其他收入']
+const INCOME_CATEGORIES = ['利息收入', '其他收入']
+const COST_CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const canReadPayments = computed(() => auth.can('expense:read'))
+const canReadAccounts = computed(() => auth.canAll(['company_account:read', 'expense:read', 'company_account:ledger_read']))
+type LedgerSection = 'accounts' | 'payments' | 'unassigned' | 'undated'
+const activeSection = computed<LedgerSection>({
+  get: () => {
+    const section = route.query.section
+    if (!canReadAccounts.value && section !== 'unassigned' && section !== 'undated') return 'payments'
+    return section === 'payments' || section === 'unassigned' || section === 'undated' ? section : 'accounts'
+  },
+  set: section => { void router.replace({ path: '/bank-ledger', query: section === 'accounts' ? {} : { section } }) },
+})
+function openExpenseSource(id: string) {
+  void router.push({ path: '/expenses', query: { expense_id: id, return_to: 'bank' } })
+}
+function openExpenseCreate(account: CompanyAccount) {
+  void router.push({ path: '/expenses', query: { action: 'create', account_id: account.id, return_to: 'bank' } })
+}
+function canOpenCashSource(row: BankLedgerRow) {
+  if (row.source_kind === 'receipt') return !!row.document_id && auth.canAll(['order:read', 'payment:read'])
+  return row.source_kind === 'expense' && !!row.source_id
+    || !!(row.source_kind && row.source_id && expenditureSourceTarget(row as BankLedgerRow & { source_kind: string }))
+}
+function openCashSource(row: BankLedgerRow) {
+  if (row.source_kind === 'receipt' && row.document_id) {
+    void router.push({ name: 'OrderDetail', params: { id: row.document_id }, query: { tab: 'changes' } })
+    return
+  }
+  if (row.source_kind === 'expense' && row.source_id) return openExpenseSource(row.source_id)
+  const target = row.source_kind && row.source_id ? expenditureSourceTarget(row as BankLedgerRow & { source_kind: string }) : null
+  if (target) void router.push(target)
+}
 const canCreateEntry = computed(() => auth.can('company_account:ledger_create'))
+const canCreateProjectCost = computed(() => auth.canAll(['company_account:select', 'expense:create']))
+const canCreateReceipt = computed(() => auth.canAll(['company_account:select', 'payment:create']))
 const canSetOpeningBalance = computed(() => auth.can('company_account:opening_balance_set'))
 const accounts = shallowRef<CompanyAccount[]>([])
 const accountsLoading = ref(true)
@@ -311,6 +406,7 @@ const openingForm = reactive({ entry_date: '', amount: null as number | null })
 const entryDialogVisible = ref(false)
 const entryTarget = ref<CompanyAccount | null>(null)
 const entryFormRef = ref<FormInstance>()
+const entryPurpose = ref<BankLedgerPurpose>('manual')
 const entryForm = reactive({
   request_id: newRequestId(),
   entry_date: businessToday(),
@@ -329,7 +425,17 @@ const selectedSupplierName = ref('')
 const ordersLoading = ref(false)
 const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
 let orderSearchSequence = 0
-const categoryOptions = computed(() => entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
+const categoryOptions = computed(() => {
+  if (entryPurpose.value === 'project_cost') return COST_CATEGORIES
+  return entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+})
+const entryPurposeHint = computed(() => ({
+  manual: '适用于手续费、利息等独立流水。已在系统登记的业务收付款请勿重复补录。',
+  project_cost: '按实际已付款金额登记，同时计入所选订单的项目成本。已有应付款请从应付账款登记付款。',
+  receipt: '登记后增加账户收入，并冲减所选订单及其合同的待收金额。',
+})[entryPurpose.value])
+const categoryRules = [{ required: true, whitespace: true, message: '请选择或填写成本分类', trigger: 'change' }]
+const orderRules = [{ required: true, message: '请选择关联订单', trigger: 'change' }]
 const openingRules = {
   entry_date: [{ required: true, message: '请选择期初日期', trigger: 'change' }],
   amount: [{ required: true, type: 'number', min: 0, message: '请填写不小于零的期初余额', trigger: 'change' }],
@@ -446,6 +552,7 @@ function openEntry(account: CompanyAccount) {
 }
 
 function resetEntryForm() {
+  entryPurpose.value = 'manual'
   entryForm.request_id = newRequestId()
   entryForm.entry_date = businessToday()
   entryForm.direction = 'expense'
@@ -455,11 +562,19 @@ function resetEntryForm() {
   entryForm.counterparty_name = ''
   entryForm.counterparty_supplier_id = ''
   selectedSupplierName.value = ''
+  resetEntryPurposeFields()
+}
+
+function resetEntryPurposeFields() {
+  entryForm.request_id = newRequestId()
   entryForm.category = ''
   entryForm.project_name = ''
   entryForm.department = ''
   entryForm.order_id = ''
+  orderSearchSequence++
+  ordersLoading.value = false
   orderOptions.value = []
+  entryFormRef.value?.clearValidate(['category', 'order_id'])
 }
 
 async function fetchSupplierSuggestions(query: string, callback: (items: Array<BankLedgerSupplierOption & { value: string }>) => void) {
@@ -488,7 +603,7 @@ async function searchOrderOptions(keyword: string) {
   const sequence = ++orderSearchSequence
   ordersLoading.value = true
   try {
-    const orders = await getBankLedgerOrderOptions(keyword.trim() || undefined)
+    const orders = await getBankLedgerOrderOptions(keyword.trim(), entryPurpose.value)
     if (sequence !== orderSearchSequence) return
     const selectedOrder = orderOptions.value.find(order => order.id === entryForm.order_id)
     orderOptions.value = selectedOrder && !orders.some(order => order.id === selectedOrder.id)
@@ -514,23 +629,43 @@ function selectOrder(orderId: string | undefined) {
 }
 
 async function submitEntry() {
-  if (!entryTarget.value || !await entryFormRef.value?.validate().catch(() => false)) return
+  if (mutating.value || !entryTarget.value || !await entryFormRef.value?.validate().catch(() => false)) return
   if (entryForm.amount === null || entryForm.amount <= 0) return
+  const accountId = entryTarget.value.id
+  const payload = {
+    request_id: entryForm.request_id,
+    entry_date: entryForm.entry_date,
+    amount: entryForm.amount,
+    summary: entryForm.summary.trim(),
+    order_id: entryForm.order_id,
+  }
   mutating.value = true
   try {
-    await createBankLedgerEntry(entryTarget.value.id, {
-      ...entryForm,
-      amount: entryForm.amount,
-      summary: entryForm.summary.trim(),
-      counterparty_account: entryForm.counterparty_account.trim() || undefined,
-      counterparty_name: entryForm.counterparty_name.trim() || undefined,
-      counterparty_supplier_id: entryForm.counterparty_supplier_id || undefined,
-      category: entryForm.category.trim() || undefined,
-      project_name: entryForm.project_name.trim() || undefined,
-      department: entryForm.department.trim() || undefined,
-      order_id: entryForm.order_id || undefined,
-    })
-    ElMessage.success('台账流水已登记')
+    if (entryPurpose.value === 'project_cost') {
+      await createBankProjectCost(accountId, {
+        ...payload,
+        category: entryForm.category.trim(),
+        supplier_id: entryForm.counterparty_supplier_id || undefined,
+        counterparty_name: entryForm.counterparty_name.trim() || undefined,
+      })
+      ElMessage.success('付款已登记，项目成本已更新')
+    } else if (entryPurpose.value === 'receipt') {
+      await createBankCustomerReceipt(accountId, payload)
+      ElMessage.success('收款已登记，应收账款已更新')
+    } else {
+      await createBankLedgerEntry(accountId, {
+        ...payload,
+        direction: entryForm.direction,
+        counterparty_account: entryForm.counterparty_account.trim() || undefined,
+        counterparty_name: entryForm.counterparty_name.trim() || undefined,
+        counterparty_supplier_id: entryForm.counterparty_supplier_id || undefined,
+        category: entryForm.category.trim() || undefined,
+        project_name: entryForm.project_name.trim() || undefined,
+        department: entryForm.department.trim() || undefined,
+        order_id: payload.order_id || undefined,
+      })
+      ElMessage.success('台账流水已登记')
+    }
     entryDialogVisible.value = false
     page.value = 1
     await loadLedger()
@@ -542,7 +677,7 @@ async function submitEntry() {
 }
 
 watch([activeAccountId, page], loadLedger)
-onMounted(loadAccounts)
+onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
 </script>
 
 <style scoped>

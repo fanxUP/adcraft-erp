@@ -1,17 +1,17 @@
 <template>
-  <section class="expenditure-view" :aria-label="view === 'ledger' ? '支出台账' : '付款记录'">
+  <section class="expenditure-view" :aria-label="view === 'ledger' ? '支出台账' : paymentQueue === 'unassigned' ? '待归户付款' : paymentQueue === 'undated' ? '日期待核实付款' : '付款记录'">
     <PageToolbar aria-label="支出筛选">
       <el-form inline class="expenditure-filters" @submit.prevent="search">
         <el-form-item label="搜索">
           <el-input v-model="keyword" clearable maxlength="128" placeholder="单号、项目或供应商" aria-label="支出搜索" @keyup.enter="search" />
         </el-form-item>
-        <el-form-item v-if="view === 'disbursements' && !paymentAccountId" label="付款账户">
+        <el-form-item v-if="view === 'disbursements' && !paymentAccountId && paymentQueue !== 'unassigned'" label="付款账户">
           <el-select v-model="accountFilter" clearable placeholder="全部账户" aria-label="筛选付款账户" @change="search">
             <el-option label="未登记账户" value="unassigned" />
             <el-option v-for="account in accountOptions" :key="account.id" :value="account.id" :label="account.label + (account.is_active ? '' : '（已停用）')" />
           </el-select>
         </el-form-item>
-        <el-form-item label="付款日期">
+        <el-form-item v-if="paymentQueue !== 'undated'" label="付款日期">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" range-separator="至" @change="search" />
         </el-form-item>
         <el-form-item>
@@ -29,7 +29,7 @@
               <el-option v-for="source in availableSources" :key="source" :label="sourceLabels[source]" :value="source" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="view === 'disbursements'" label="日期状态">
+          <el-form-item v-if="view === 'disbursements' && paymentQueue !== 'undated'" label="日期状态">
             <el-select v-model="dateStatus" aria-label="付款日期状态" @change="changeDateStatus">
               <el-option label="全部" value="all" />
               <el-option label="有付款日期" value="confirmed" />
@@ -54,7 +54,7 @@
         <div><dt>剩余待付</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
       </template>
       <template v-else>
-        <div><dt>{{ paymentAccountId || accountFilter ? '已登记付款合计' : dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(paymentAccountId || accountFilter ? result.summary.amount : result.summary.confirmed_paid_amount || 0) }}</dd></div>
+        <div><dt>{{ paymentQueue === 'unassigned' ? '待归户付款' : paymentQueue === 'undated' ? '日期待核实' : paymentAccountId || accountFilter ? '已登记付款合计' : dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(paymentQueue ? result.summary.amount : paymentAccountId || accountFilter ? result.summary.amount : result.summary.confirmed_paid_amount || 0) }}</dd></div>
       </template>
     </dl>
 
@@ -246,7 +246,7 @@ import PaymentAccountSelect from './PaymentAccountSelect.vue'
 import { assignPaymentAccount, getCompanyAccountOptions, type CompanyAccount } from '@/api/companyAccounts'
 import { getErrorMessage } from '@/utils/error'
 
-const props = defineProps<{ view: ExpenditureView; refreshKey: number; paymentAccountId?: string }>()
+const props = defineProps<{ view: ExpenditureView; refreshKey: number; paymentAccountId?: string; paymentQueue?: 'unassigned' | 'undated' }>()
 const emit = defineEmits<{ manageExpense: [id: string]; deleteExpense: [id: string] }>()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -408,10 +408,10 @@ async function fetchData() {
       page: page.value, page_size: pageSize.value,
       ...(sourceType.value ? { source_type: sourceType.value } : {}),
       ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
-      ...(dateRange.value?.length === 2 ? { start_date: dateRange.value[0], end_date: dateRange.value[1] } : {}),
-      ...(props.view === 'disbursements' ? { date_status: dateStatus.value,
+      ...(props.paymentQueue !== 'undated' && dateRange.value?.length === 2 ? { start_date: dateRange.value[0], end_date: dateRange.value[1] } : {}),
+      ...(props.view === 'disbursements' ? { date_status: props.paymentQueue === 'undated' ? 'unverified' : dateStatus.value,
         ...(props.paymentAccountId || (accountFilter.value && accountFilter.value !== 'unassigned') ? { payment_account_id: props.paymentAccountId || accountFilter.value } : {}),
-        ...(accountFilter.value === 'unassigned' && !props.paymentAccountId ? { account_unassigned: true } : {}),
+        ...((props.paymentQueue === 'unassigned' || accountFilter.value === 'unassigned') && !props.paymentAccountId ? { account_unassigned: true } : {}),
       } : {}),
     })
     if (requests.isCurrent(id)) result.value = data
@@ -439,6 +439,7 @@ watch(() => props.refreshKey, (value, previous) => {
   void fetchData()
 })
 watch(() => props.paymentAccountId, () => search())
+watch(() => props.paymentQueue, () => search())
 onMounted(async () => {
   if (authStore.canAny(['company_account:select', 'company_account:read'])) {
     try { accountOptions.value = await getCompanyAccountOptions() } catch { /* Existing records remain readable. */ }

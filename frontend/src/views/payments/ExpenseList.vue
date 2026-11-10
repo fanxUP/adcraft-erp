@@ -29,7 +29,7 @@
 
     <el-dialog
       v-model="showDialog"
-      :title="isEditing ? (authStore.can('expense:update') ? '编辑支出' : '查看支出') : '登记支出'"
+      :title="isEditing ? (authStore.can('expense:update') ? '编辑支出' : '查看支出') : route.query.return_to === 'payables' ? '登记待付款费用' : route.query.return_to === 'bank' ? '登记费用付款' : '登记支出'"
       width="min(94vw, 700px)"
       class="expense-dialog"
       top="5vh"
@@ -306,7 +306,8 @@ function resetForm() {
 
 function openCreate() {
   resetForm()
-  form.expense_date = businessToday()
+  form.expense_date = route.query.return_to === 'payables' ? '' : businessToday()
+  if (typeof route.query.account_id === 'string') form.payment_account_id = route.query.account_id
   showDialog.value = true
 }
 
@@ -381,6 +382,8 @@ function handleExpenseDialogClosed() {
   })
   isEditing.value = false
   editingId.value = ''
+  if (route.query.return_to === 'bank') void router.push({ path: '/bank-ledger', query: { section: 'payments' } })
+  else if (route.query.return_to === 'payables') void router.push('/cost-debts')
 }
 
 function expenseAttachmentKind(

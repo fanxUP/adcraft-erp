@@ -10,7 +10,7 @@ from sqlalchemy import func, insert, select, text
 from app.models.company_account import CompanyAccount
 from app.models.outsource import OutsourcePayment
 from app.models.payable import PayablePayment
-from app.models.payment import Expense
+from app.models.payment import Expense, Payment
 from app.models.project_cost import ProjectCost
 from app.models.user import Permission, Role, role_permissions
 from tests.test_expenditure_integration import fixture_db  # noqa: F401
@@ -26,6 +26,10 @@ async def test_migration_preserves_rows_and_sums_grants_and_guarded_rollback(fix
     before = [(await db.execute(select(func.count(), func.sum(model.amount)).select_from(model))).one() for model in models]
     for model in models:
         await db.execute(text(f'ALTER TABLE "{model.__tablename__}" DROP COLUMN payment_account_id'))
+    # The schema fixture uses current models. These later references did not
+    # exist at the company account migration's starting revision.
+    await db.execute(text(f"ALTER TABLE {Payment.__tablename__} DROP COLUMN payment_account_id"))
+    await db.execute(text("DROP TABLE bank_ledger_entries"))
     await db.execute(text("DROP TABLE company_accounts"))
     operator, reader, finance = uuid4(), uuid4(), uuid4()
     create_permission = uuid4()

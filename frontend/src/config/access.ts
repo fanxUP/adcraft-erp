@@ -222,7 +222,9 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   // finance:view_cost 只代表成本字段可见，不能单独打开包含支出的应付台账。
   costDebt: ['expense:read'],
   companyAccount: ['company_account:read'],
-  bankLedger: { allOf: ['company_account:read', 'expense:read', 'company_account:ledger_read'] },
+  // Payment records share the bank-ledger page, but account balances retain
+  // their separate server-side permission boundary.
+  bankLedger: ['expense:read'],
   supplier: { anyGroups: [['supplier_center:read', 'supplier:read'], ['outsource_center:read', 'outsource_vendor:read']] },
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
@@ -398,7 +400,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   ProjectCostList: '项目成本',
   ProjectCostDetail: '项目成本详情',
   QuoteCostDetail: '报价成本详情',
-  CostDebtList: '应付管理',
+  CostDebtList: '应付账款',
   SupplierList: '供应商管理',
   DailyReport: '销售日报',
   MonthlyReport: '销售月报',

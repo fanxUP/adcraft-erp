@@ -165,7 +165,9 @@ class PayableService:
             query = query.where(model.deleted_at.is_(None), func.coalesce(amount, 0) > 0)
             if supplier_id:
                 query = query.where(model.supplier_id == supplier_id)
-            if status:
+            if status == "outstanding":
+                query = query.where(paid < amount)
+            elif status:
                 query = query.where(state == status)
             if keyword:
                 query = query.where(func.concat_ws(" ", *terms).icontains(keyword, autoescape=True))
@@ -442,7 +444,7 @@ class PayableService:
         source_type: str | None = None,
         supplier_id: UUID | None = None,
     ) -> tuple[list[dict], int]:
-        if status and status not in PAYABLE_STATUS_LABELS:
+        if status and status not in (*PAYABLE_STATUS_LABELS, "outstanding"):
             raise ValueError("不支持的应付状态")
         normalized_type = _normalize_source_type(source_type) if source_type else None
         keys, total = await self._page_source_keys(page, page_size, keyword, status, normalized_type, supplier_id)

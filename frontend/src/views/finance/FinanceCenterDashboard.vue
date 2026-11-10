@@ -7,7 +7,7 @@
       >
         <template #actions>
           <el-button v-if="canReadReceipts" @click="goTo('/receivables')">客户收款</el-button>
-          <el-button v-if="canReadDisbursements && authStore.can('expense:create')" @click="goToExpense('create')">登记支出</el-button>
+          <el-button v-if="canReadDisbursements && authStore.can('expense:create')" @click="goToExpense('create')">登记费用付款</el-button>
           <el-button v-if="canReadDisbursements" type="primary" @click="goToExpense('disbursements')">
             查看付款记录
           </el-button>
@@ -314,7 +314,9 @@ function goTo(path: string) {
 }
 
 function goToExpense(action: 'create' | 'disbursements') {
-  void router.push({ path: '/expenses', query: action === 'create' ? { action: 'create' } : { view: 'disbursements' } })
+  void router.push(action === 'create'
+    ? { path: '/expenses', query: { action: 'create', return_to: 'bank' } }
+    : { path: '/bank-ledger', query: { section: 'payments' } })
 }
 
 function overlapStatusLabel(status: FinanceCostOverlapCandidate['review_status']) {

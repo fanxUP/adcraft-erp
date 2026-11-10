@@ -2,18 +2,26 @@
   <AppPage>
     <template #header>
       <PageHeader
-        title="应付管理"
-        description="统一查看支出和项目成本的待付款金额，并登记实际付款流水。"
+        title="应付账款"
+        description="按未付余额查看费用、项目成本和外协待结算任务；实际付款流水可在银行台账查看。"
       >
         <template #meta>
-          <div class="summary-bar">
+          <div v-if="activeBook === 'standard'" class="summary-bar">
             <span class="text-warning">当前页待付款：{{ formatMoney(pendingTotal) }}</span>
           </div>
+        </template>
+        <template #actions>
+          <el-button v-if="activeBook === 'standard' && authStore.can('expense:create')" @click="router.push({ path: '/expenses', query: { action: 'create', return_to: 'payables' } })">登记待付款费用</el-button>
         </template>
       </PageHeader>
     </template>
 
-    <template #toolbar>
+    <el-tabs v-if="canReadExternal" v-model="activeBook" aria-label="应付账款分类">
+      <el-tab-pane label="费用与项目成本" name="standard" />
+      <el-tab-pane label="外协待结算" name="external" />
+    </el-tabs>
+
+    <template v-if="activeBook === 'standard'" #toolbar>
       <PageToolbar aria-label="应付管理筛选">
         <el-form :model="filters" inline>
           <el-form-item label="关键词">
@@ -38,6 +46,7 @@
           </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px" @change="handleSearch">
+              <el-option label="未结清" value="outstanding" />
               <el-option label="待付款" value="unpaid" />
               <el-option label="部分付款" value="partial" />
               <el-option label="已付款" value="paid" />
@@ -51,7 +60,7 @@
       </PageToolbar>
     </template>
 
-    <DataTableShell :state="tableState" aria-label="应付管理列表">
+    <DataTableShell v-if="activeBook === 'standard'" :state="tableState" aria-label="应付账款列表">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="list" stripe>
         <el-table-column label="来源" width="110">
@@ -114,6 +123,26 @@
         />
       </template>
     </DataTableShell>
+
+    <section v-else aria-label="外协待结算任务">
+      <el-alert title="外协任务在完成后形成待结算款；进行中的预付款任务也列在这里供核对。登记付款请进入外协付款。" type="info" :closable="false" show-icon />
+      <p v-if="externalResult" class="external-summary">{{ externalResult.total }} 条任务，待结算 {{ formatMoney(externalResult.summary.remaining_amount || 0) }}</p>
+      <DataTableShell :state="externalTableState" aria-label="外协待结算列表">
+        <template #error><StatePanel state="error" action-label="重试" @action="fetchExternal" /></template>
+        <el-table :data="externalResult?.items || []" row-key="row_key" stripe>
+          <el-table-column prop="source_no" label="任务编号" min-width="175" />
+          <el-table-column prop="project_name" label="项目" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.project_name || '未关联项目' }}</template></el-table-column>
+          <el-table-column prop="supplier_name" label="供应商" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.supplier_name || '—' }}</template></el-table-column>
+          <el-table-column label="任务金额" width="125" align="right"><template #default="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column>
+          <el-table-column label="累计已付" width="125" align="right"><template #default="{ row }">{{ formatMoney(row.paid_amount) }}</template></el-table-column>
+          <el-table-column label="待结算" width="125" align="right"><template #default="{ row }">{{ formatMoney(row.remaining_amount) }}</template></el-table-column>
+          <el-table-column label="操作" width="145" fixed="right"><template #default="{ row }"><el-button text type="primary" @click="openExternalTask(row)">查看外协任务</el-button></template></el-table-column>
+        </el-table>
+        <template #footer>
+          <el-pagination v-model:current-page="externalPage" :page-size="20" :total="externalResult?.total || 0" layout="total, prev, pager, next" @current-change="fetchExternal" />
+        </template>
+      </DataTableShell>
+    </section>
 
     <el-dialog v-model="showPayment" title="登记付款" width="500px" :close-on-click-modal="false">
       <el-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" label-width="100px">
@@ -193,11 +222,12 @@
 <script setup lang="ts">
 import { getErrorMessage } from '@/utils/error'
 import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
-import { createPayablePayment, getPayable, getPayables, voidPayablePayment } from '@/api/payments'
+import { createPayablePayment, getExpenditure, getPayable, getPayables, voidPayablePayment, type ExpenditureResult, type ExpenditureRow } from '@/api/payments'
 import { getSuppliers } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import type { PayablePaymentResponse, PayableResponse, SupplierResponse } from '@/types/api'
@@ -221,6 +251,33 @@ const paymentTarget = ref<PayableResponse | null>(null)
 const historyTarget = ref<PayableResponse | null>(null)
 const historyRows = ref<PayablePaymentResponse[]>([])
 const authStore = useAuthStore()
+const router = useRouter()
+const canReadExternal = computed(() => authStore.canAll(['expense:read', 'outsource_center:read', 'outsource_task:read', 'outsource_payment:read', 'finance:view_cost']))
+const activeBook = ref<'standard' | 'external'>('standard')
+const externalPage = ref(1)
+const externalResult = ref<ExpenditureResult | null>(null)
+const externalLoading = ref(false)
+const externalError = ref(false)
+const externalTableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() =>
+  externalError.value ? 'error' : externalLoading.value ? 'loading' : externalResult.value?.items.length ? 'ready' : 'empty')
+async function fetchExternal() {
+  if (!canReadExternal.value) return
+  externalLoading.value = true
+  externalError.value = false
+  try {
+    externalResult.value = await getExpenditure('ledger', {
+      page: externalPage.value, page_size: 20, source_type: 'outsource', outstanding_only: true,
+    })
+  } catch {
+    externalError.value = true
+  } finally {
+    externalLoading.value = false
+  }
+}
+function openExternalTask(row: ExpenditureRow) {
+  void router.push({ path: '/outsource/tasks', query: row.document_id ? { order_id: row.document_id } : {} })
+}
+watch(activeBook, book => { if (book === 'external') void fetchExternal() })
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 const suppliers = ref<SupplierResponse[]>([])
 
@@ -228,7 +285,7 @@ const filters = reactive({
   keyword: '',
   source_type: undefined as string | undefined,
   supplier_id: undefined as string | undefined,
-  status: undefined as string | undefined,
+  status: 'outstanding' as string | undefined,
 })
 
 const paymentForm = reactive({
@@ -279,7 +336,7 @@ function handleReset() {
   filters.keyword = ''
   filters.source_type = undefined
   filters.supplier_id = undefined
-  filters.status = undefined
+  filters.status = 'outstanding'
   page.value = 1
   fetchData()
 }
@@ -379,5 +436,6 @@ onMounted(() => {
 .summary-bar { display: flex; align-items: center; gap: 8px; }
 .text-warning { color: var(--el-color-warning); font-weight: 600; }
 .history-summary { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; color: var(--ad-text-secondary); }
+.external-summary { margin: 16px 0; font-weight: 600; }
 .muted { color: var(--ad-text-secondary); font-size: 12px; }
 </style>

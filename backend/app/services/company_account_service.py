@@ -12,7 +12,7 @@ from app.models.company_account import CompanyAccount
 from app.models.bank_ledger import BankLedgerEntry
 from app.models.outsource import OutsourcePayment
 from app.models.payable import PayablePayment
-from app.models.payment import Expense
+from app.models.payment import Expense, Payment
 from app.models.project_cost import ProjectCost
 
 
@@ -43,7 +43,7 @@ class CompanyAccountService:
 
     async def is_referenced(self, account_id):
         checks = [exists(select(model.id).where(model.payment_account_id == account_id))
-                  for model in (Expense, ProjectCost, PayablePayment, OutsourcePayment)]
+                  for model in (Expense, ProjectCost, PayablePayment, OutsourcePayment, Payment)]
         checks.append(exists(select(BankLedgerEntry.id).where(BankLedgerEntry.account_id == account_id)))
         return bool(await self.db.scalar(select(or_(*checks))))
 

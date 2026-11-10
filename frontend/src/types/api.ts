@@ -928,6 +928,7 @@ export interface PaymentResponse {
   department?: string
   amount: number
   payment_method?: string
+  payment_account_id?: string | null
   paid_at?: string
   remark?: string
   is_voided: boolean
