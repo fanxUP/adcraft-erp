@@ -333,6 +333,7 @@ class ProjectCostService:
 
         account_id = await CompanyAccountService(self.db).initial_account(data, Decimal(str(data["amount"])) - Decimal(str(debt_amount)))
         cost = ProjectCost(
+            request_id=data.get("request_id"),
             payment_account_id=account_id,
             cost_no=await generate_project_cost_no(self.db),
             document_id=document_id,

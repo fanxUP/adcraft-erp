@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -22,12 +23,15 @@ from app.models.project_cost import ProjectCost
 from app.schemas.common import error, success
 from app.schemas.company_account import (
     BankLedgerEntryCreate,
+    BankProjectCostCreate,
+    BankCustomerReceiptCreate,
     CompanyAccountCreate,
     CompanyAccountUpdate,
     OpeningBalanceSet,
     PaymentAccountAssignment,
 )
 from app.services.bank_ledger_service import BankLedgerService
+from app.services.business_document_service import ORDER_ITEM_MUTABLE_STATUSES
 from app.services.company_account_service import CompanyAccountService
 from app.services.operation_log_service import log_operation
 
@@ -76,6 +80,7 @@ async def bank_ledger_supplier_options(
 @router.get("/ledger-options/orders")
 async def bank_ledger_order_options(
     keyword: str | None = Query(default=None, max_length=100),
+    purpose: Literal["manual", "project_cost", "receipt"] = "manual",
     db: AsyncSession = Depends(get_db),
     user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
 ):
@@ -83,6 +88,13 @@ async def bank_ledger_order_options(
         BusinessDocument.doc_type == "order",
         BusinessDocument.deleted_at.is_(None),
     )
+    if purpose == "project_cost":
+        query = query.where(BusinessDocument.status.in_(ORDER_ITEM_MUTABLE_STATUSES - {"completed"}))
+    elif purpose == "receipt":
+        query = query.where(
+            BusinessDocument.status.not_in(("pending_confirm", "cancelled")),
+            BusinessDocument.customer_id.is_not(None),
+        )
     if keyword and keyword.strip():
         search = f"%{keyword.strip()}%"
         query = query.where(or_(
@@ -204,6 +216,50 @@ async def create_account_ledger_entry(
             },
         )
     return success(BankLedgerService.entry_payload(entry))
+
+
+@router.post("/{account_id}/project-cost-payments")
+async def create_bank_project_cost(
+    account_id: UUID,
+    data: BankProjectCostCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_all_permissions(PERM_COMPANY_ACCOUNT_LEDGER_CREATE, "company_account:select", "expense:create")),
+):
+    try:
+        async with db.begin_nested():
+            cost, created = await BankLedgerService(db, user).create_project_cost(account_id, data.model_dump(), user.id)
+    except ValueError as exc:
+        return error(40001, str(exc))
+    if created:
+        await log_operation(
+            db, user.id, user.real_name or user.username, "project_cost", UUID(cost["id"]),
+            "create", ip_address=request.client.host if request.client else None,
+            after_data={"cost_no": cost["cost_no"], "amount": cost["amount"], "payment_account_id": str(account_id)},
+        )
+    return success({"id": cost["id"], "cost_no": cost["cost_no"]})
+
+
+@router.post("/{account_id}/customer-receipts")
+async def create_bank_customer_receipt(
+    account_id: UUID,
+    data: BankCustomerReceiptCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_all_permissions(PERM_COMPANY_ACCOUNT_LEDGER_CREATE, "company_account:select", "payment:create")),
+):
+    try:
+        async with db.begin_nested():
+            receipt, created = await BankLedgerService(db, user).create_customer_receipt(account_id, data.model_dump(), user.id)
+    except ValueError as exc:
+        return error(40001, str(exc))
+    if created:
+        await log_operation(
+            db, user.id, user.real_name or user.username, "payment", UUID(receipt["id"]),
+            "create", ip_address=request.client.host if request.client else None,
+            after_data={"payment_no": receipt["payment_no"], "amount": receipt["amount"], "payment_account_id": str(account_id)},
+        )
+    return success({"id": receipt["id"], "payment_no": receipt["payment_no"]})
 
 
 @router.put("/assignments/{kind}/{record_id}")

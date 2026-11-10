@@ -126,14 +126,6 @@ class PaymentService:
             return Decimal(str(result.scalar() or 0))
         return Decimal(str(contract.total_amount or 0))
 
-    async def _resolve_contract_for_order(self, order_id: UUID) -> UUID:
-        contract_ids = await self.repo.get_contract_ids_for_document(order_id)
-        if len(contract_ids) == 1:
-            return contract_ids[0]
-        if len(contract_ids) > 1:
-            raise ValueError("该订单关联了多个合同，请先明确收款合同")
-        raise ValueError("该订单尚未关联合同，请先关联合同后再登记收款")
-
     @staticmethod
     def _validate_order_for_payment(order: BusinessDocument | None) -> None:
         if not order:
@@ -143,7 +135,46 @@ class PaymentService:
         if order.status in ("pending_confirm", "cancelled") or order.deleted_at is not None:
             raise ValueError("当前订单状态不允许登记收款")
 
-    async def create_payment(self, data: dict, created_by: UUID) -> dict:
+    async def _new_receipt(self, data, order_id, customer_id, amount, created_by):
+        return Payment(
+            payment_no=await generate_payment_no(self.db),
+            document_id=order_id,
+            customer_id=customer_id,
+            amount=amount,
+            request_id=_uuid_or_none(data.get("request_id")),
+            payment_account_id=_uuid_or_none(data.get("payment_account_id")),
+            payment_method=data.get("payment_method"),
+            paid_at=datetime.fromisoformat(data["paid_at"]) if data.get("paid_at") else None,
+            remark=data.get("remark"),
+            receipt_url=data.get("receipt_url"),
+            created_by=created_by,
+            allocations=[],
+        )
+
+    async def _create_standalone_receipt(self, data, order_id, customer_id, amount, created_by):
+        order = await self.db.get(BusinessDocument, order_id, with_for_update=True, populate_existing=True)
+        self._validate_order_for_payment(order)
+        if order.customer_id != customer_id:
+            raise ValueError("收款客户与订单不一致")
+        if await self.repo.get_contract_ids_for_document(order_id):
+            raise ValueError("订单的合同归属已变化，请重新登记")
+        paid = await self.repo.get_document_paid_sum(order_id)
+        remaining = max(Decimal("0"), Decimal(str(order.total_amount or 0)) - paid)
+        if amount > remaining:
+            raise ValueError(f"收款金额超过订单未收金额 {remaining:.2f} 元")
+
+        statement_service = StatementService(self.db)
+        await statement_service.capture_confirmed_for_customer(customer_id)
+        payment = await self._new_receipt(data, order_id, customer_id, amount, created_by)
+        payment.document = order
+        payment.allocations = []
+        await self.repo.create(payment)
+        order.paid_amount = paid + amount
+        order.unpaid_amount = remaining - amount
+        await statement_service.refresh_drafts_for_customer(customer_id)
+        return self._to_dict(payment)
+
+    async def create_payment(self, data: dict, created_by: UUID, *, allow_standalone: bool = False) -> dict:
         """Create a contract-based receipt and immutable allocations.
 
         ``order_id`` is retained for old clients. It resolves to the unique
@@ -167,10 +198,21 @@ class PaymentService:
             if candidate_order.customer_id != customer_id:
                 raise ValueError("收款客户与订单不一致")
 
+        amount = Decimal(str(data["amount"])).quantize(Decimal("0.01"))
+        if amount <= 0:
+            raise ValueError("收款金额必须大于0")
+
         if not contract_id:
             if not document_id:
                 raise ValueError("请选择收款合同")
-            contract_id = await self._resolve_contract_for_order(document_id)
+            contract_ids = await self.repo.get_contract_ids_for_document(document_id)
+            if len(contract_ids) > 1:
+                raise ValueError("该订单关联了多个合同，请先明确收款合同")
+            if not contract_ids:
+                if allow_standalone:
+                    return await self._create_standalone_receipt(data, document_id, customer_id, amount, created_by)
+                raise ValueError("该订单尚未关联合同，请先关联合同后再登记收款")
+            contract_id = contract_ids[0]
 
         contract = await self.db.get(Contract, contract_id, with_for_update=True)
         if not contract or contract.deleted_at is not None:
@@ -178,9 +220,6 @@ class PaymentService:
         if contract.customer_id != customer_id:
             raise ValueError("收款客户与合同不一致")
 
-        amount = Decimal(str(data["amount"])).quantize(Decimal("0.01"))
-        if amount <= 0:
-            raise ValueError("收款金额必须大于0")
         total_amount = await self._get_contract_total(contract)
         existing_paid = Decimal(str(await self.repo.get_contract_paid_sum(contract.id)))
         remaining = max(Decimal("0"), total_amount - existing_paid)
@@ -232,17 +271,7 @@ class PaymentService:
             if len(order_ids) == 1:
                 compatibility_document_id = order_ids[0]
 
-        payment = Payment(
-            payment_no=await generate_payment_no(self.db),
-            document_id=compatibility_document_id,
-            customer_id=customer_id,
-            amount=amount,
-            payment_method=data.get("payment_method"),
-            paid_at=datetime.fromisoformat(data["paid_at"]) if data.get("paid_at") else None,
-            remark=data.get("remark"),
-            receipt_url=data.get("receipt_url"),
-            created_by=created_by,
-        )
+        payment = await self._new_receipt(data, compatibility_document_id, customer_id, amount, created_by)
         if compatibility_document_id:
             payment.document = locked_orders.get(compatibility_document_id)
         await StatementService(self.db).capture_confirmed_for_customer(customer_id)
@@ -386,7 +415,7 @@ class PaymentService:
             Decimal("0"),
         )
         if not allocations:
-            allocation_status = "待分配"
+            allocation_status = "订单收款" if document_id and _uuid_or_none(getattr(p, "payment_account_id", None)) else "待分配"
         elif allocation_total < Decimal(str(p.amount or 0)):
             allocation_status = "部分分配"
         else:
@@ -408,6 +437,7 @@ class PaymentService:
             "record_type": p.record_type if isinstance(getattr(p, "record_type", None), str) else "receipt",
             "reference_payment_id": str(p.reference_payment_id) if isinstance(getattr(p, "reference_payment_id", None), UUID) else None,
             "payment_method": p.payment_method,
+            "payment_account_id": str(p.payment_account_id) if isinstance(getattr(p, "payment_account_id", None), UUID) else None,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
             "is_voided": p.is_voided,

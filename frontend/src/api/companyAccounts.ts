@@ -23,10 +23,10 @@ export const getCompanyAccounts = () => get<CompanyAccount[]>('/company-accounts
 export const getCompanyAccountOptions = () => get<CompanyAccount[]>('/company-accounts/options', { params: { include_inactive: true } })
 export interface BankLedgerRow {
   id: string
-  entry_type: 'opening_balance' | 'source_payment' | 'manual'
+  entry_type: 'opening_balance' | 'source_payment' | 'source_receipt' | 'manual'
   source_label: string
   source_kind?: string
-  source_id?: string
+  source_id?: string | null
   document_id?: string | null
   document_type?: string | null
   entry_date: string
@@ -81,10 +81,12 @@ export interface BankLedgerEntryCreate {
   department?: string
   order_id?: string
 }
+type BankBusinessEntry = Pick<BankLedgerEntryCreate, 'request_id' | 'entry_date' | 'amount' | 'summary'> & { order_id: string }
+export type BankLedgerPurpose = 'manual' | 'project_cost' | 'receipt'
 export const getBankLedgerSupplierOptions = (keyword?: string) =>
   get<BankLedgerSupplierOption[]>('/company-accounts/ledger-options/suppliers', { params: keyword ? { keyword } : undefined })
-export const getBankLedgerOrderOptions = (keyword?: string) =>
-  get<BankLedgerOrderOption[]>('/company-accounts/ledger-options/orders', { params: keyword ? { keyword } : undefined })
+export const getBankLedgerOrderOptions = (keyword: string, purpose: BankLedgerPurpose) =>
+  get<BankLedgerOrderOption[]>('/company-accounts/ledger-options/orders', { params: { keyword, purpose } })
 export const getBankLedger = (accountId: string, params?: { page?: number; page_size?: number }) =>
   get<BankLedgerResult>('/company-accounts/' + accountId + '/ledger', { params })
 export const setBankLedgerOpeningBalance = (
@@ -96,6 +98,11 @@ export const createBankLedgerEntry = (accountId: string, data: BankLedgerEntryCr
     '/company-accounts/' + accountId + '/ledger-entries',
     data,
   )
+export const createBankProjectCost = (accountId: string, data: BankBusinessEntry & {
+  category: string; supplier_id?: string; counterparty_name?: string
+}) => post<{ id: string; cost_no: string }>(`/company-accounts/${accountId}/project-cost-payments`, data)
+export const createBankCustomerReceipt = (accountId: string, data: BankBusinessEntry) =>
+  post<{ id: string; payment_no: string }>(`/company-accounts/${accountId}/customer-receipts`, data)
 export const createCompanyAccount = (data: Partial<CompanyAccount>) => post<CompanyAccount>('/company-accounts/', data)
 export const updateCompanyAccount = (id: string, data: Partial<CompanyAccount>) => put<CompanyAccount>(`/company-accounts/${id}`, data)
 export const deleteCompanyAccount = (id: string) => del<{ deleted: boolean }>(`/company-accounts/${id}`)

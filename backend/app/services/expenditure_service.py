@@ -185,9 +185,12 @@ class ExpenditureService:
                     (legacy > 0, table.c.settled_at),
                     else_=cast(literal(None), DateTime),
                 )
+            description = table.c.description
+            if kind == "project_cost":
+                description = func.coalesce(func.nullif(table.c.summary, ""), description)
             branches.append(select(*self._columns(
                 kind, kind, table, table.c[number], doc, vendor, table.c.category,
-                table.c.description, table.c[date_column],
+                description, table.c[date_column],
                 func.greatest(registered_paid_date, settled_legacy_date, latest.c.last_payment_date),
                 amount, paid,
                 func.greatest(payable - legacy - _money(ps.c.paid), 0), undated,

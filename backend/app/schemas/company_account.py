@@ -1,9 +1,9 @@
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 
 class CompanyAccountCreate(BaseModel):
@@ -50,3 +50,22 @@ class BankLedgerEntryCreate(BaseModel):
     project_name: str | None = Field(default=None, max_length=255)
     department: str | None = Field(default=None, max_length=255)
     order_id: UUID | None = None
+
+
+class BankProjectCostCreate(BaseModel):
+    request_id: UUID
+    entry_date: date
+    order_id: UUID
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    category: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    supplier_id: UUID | None = None
+    counterparty_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
+
+
+class BankCustomerReceiptCreate(BaseModel):
+    request_id: UUID
+    entry_date: date
+    order_id: UUID
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]

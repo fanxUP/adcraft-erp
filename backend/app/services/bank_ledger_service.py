@@ -1,15 +1,19 @@
 """Account-level cash ledger assembled from ERP payments and manual movements."""
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, select, text
 
-from app.models.business_document import BusinessDocument
+from app.core.permissions import user_has_permission
 from app.models.bank_ledger import BankLedgerEntry
+from app.models.business_document import BusinessDocument
 from app.models.company_account import CompanyAccount
+from app.models.customer import Customer
 from app.models.outsource import OutsourceVendor
+from app.models.payment import Payment
+from app.models.project_cost import ProjectCost
 from app.services.expenditure_service import ExpenditureService
 
 SUPPORTED_ACCOUNT_TYPES = {"bank", "wechat", "alipay"}
@@ -66,6 +70,24 @@ class BankLedgerService:
         cash_payments = await ExpenditureService(self.db, self.viewer).list_account_cash_payments(
             account_id, start_date=opening_date,
         )
+        receipts_query = (
+            select(
+                Payment.id, Payment.payment_no, Payment.document_id, Payment.paid_at,
+                Payment.amount, Payment.remark, Customer.name.label("customer_name"),
+                BusinessDocument.project_name, BusinessDocument.department,
+            )
+            .join(Customer, Customer.id == Payment.customer_id)
+            .outerjoin(BusinessDocument, BusinessDocument.id == Payment.document_id)
+            .where(
+                Payment.payment_account_id == account_id,
+                Payment.record_type == "receipt",
+                Payment.is_voided.is_(False),
+                Payment.paid_at.is_not(None),
+            )
+        )
+        if opening_date:
+            receipts_query = receipts_query.where(Payment.paid_at >= datetime.combine(opening_date, datetime.min.time()))
+        receipts = (await self.db.execute(receipts_query)).mappings().all()
         manual_query = select(BankLedgerEntry).where(
             BankLedgerEntry.account_id == account_id,
             BankLedgerEntry.entry_type == "manual",
@@ -77,6 +99,30 @@ class BankLedgerService:
         )).scalars().all()
 
         rows = []
+        can_read_receipts = user_has_permission(self.viewer, "payment:read")
+        for receipt in receipts:
+            row_date = receipt["paid_at"].date()
+            document_id = receipt["document_id"] if can_read_receipts else None
+            rows.append({
+                "id": "receipt:" + str(receipt["id"]),
+                "entry_type": "source_receipt",
+                "source_label": "客户收款",
+                "source_kind": "receipt",
+                "source_id": str(receipt["id"]) if can_read_receipts else None,
+                "document_id": str(document_id) if document_id else None,
+                "document_type": "order" if document_id else None,
+                "entry_date": row_date.isoformat(),
+                "summary": (receipt["remark"] or receipt["payment_no"]) if can_read_receipts else "客户收款",
+                "counterparty_account": None,
+                "counterparty_name": receipt["customer_name"] if can_read_receipts else None,
+                "category": "客户收款",
+                "income_amount": self._money(receipt["amount"]),
+                "expense_amount": MONEY_ZERO,
+                "balance": None,
+                "project_name": receipt["project_name"] if can_read_receipts else None,
+                "department": receipt["department"] if can_read_receipts else None,
+                "_sort": (row_date, 1, receipt["paid_at"].isoformat(), str(receipt["id"])),
+            })
         for payment in cash_payments:
             paid_at = payment["paid_at"]
             row_date = paid_at.date()
@@ -242,11 +288,9 @@ class BankLedgerService:
 
     async def create_entry(self, account_id: UUID, data: dict, created_by: UUID):
         request_id = data["request_id"]
-        await self.db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-            {"key": "bank-ledger-request:" + str(request_id)},
-        )
+        await self._lock_business_request(request_id)
         account = await self._account(account_id, lock=True)
+        await self._assert_request_unclaimed(request_id, Payment, ProjectCost)
         existing = await self.db.scalar(select(BankLedgerEntry).where(
             BankLedgerEntry.request_id == request_id,
         ).with_for_update())
@@ -321,6 +365,109 @@ class BankLedgerService:
         self.db.add(entry)
         await self.db.flush()
         return entry, True
+
+    async def _lock_business_request(self, request_id: UUID):
+        await self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": "bank-business-request:" + str(request_id)},
+        )
+
+    async def _business_account(self, account_id: UUID, entry_date: date):
+        account = await self._account(account_id, lock=True)
+        if not account.is_active:
+            raise ValueError("已停用账户不能登记新流水")
+        opening = await self.db.scalar(select(BankLedgerEntry).where(
+            BankLedgerEntry.account_id == account_id,
+            BankLedgerEntry.entry_type == "opening_balance",
+        ))
+        if opening is None:
+            raise ValueError("请先设置该账户的期初余额")
+        if entry_date > self._today() or entry_date < opening.entry_date:
+            raise ValueError("流水日期须在期初日期与今天之间")
+        return account
+
+    @staticmethod
+    def _payment_method(account):
+        return {"bank": "转账支付", "wechat": "微信支付", "alipay": "支付宝转账"}[account.account_type]
+
+    @classmethod
+    def _same_business_movement(cls, record, account_id, movement_date, data):
+        return (
+            record.payment_account_id == account_id
+            and record.document_id == data["order_id"]
+            and cls._money(record.amount) == data["amount"]
+            and movement_date is not None
+            and movement_date.date() == data["entry_date"]
+        )
+
+    async def _assert_request_unclaimed(self, request_id: UUID, *models):
+        for model in models:
+            existing_id = await self.db.scalar(select(model.id).where(model.request_id == request_id))
+            if existing_id is not None:
+                raise ValueError("该请求编号已用于其他类型的业务登记")
+
+    async def create_project_cost(self, account_id: UUID, data: dict, created_by: UUID):
+        from app.services.project_cost_service import ProjectCostService
+
+        await self._lock_business_request(data["request_id"])
+        existing = await self.db.scalar(select(ProjectCost).where(ProjectCost.request_id == data["request_id"]))
+        if existing:
+            if not self._same_business_movement(existing, account_id, existing.cost_date, data):
+                raise ValueError("该请求编号已用于另一笔项目成本")
+            return {"id": str(existing.id), "cost_no": existing.cost_no}, False
+        await self._assert_request_unclaimed(data["request_id"], Payment, BankLedgerEntry)
+        account = await self._business_account(account_id, data["entry_date"])
+        order_id = await self.db.scalar(select(BusinessDocument.id).where(
+            BusinessDocument.id == data["order_id"],
+            BusinessDocument.doc_type == "order",
+            BusinessDocument.deleted_at.is_(None),
+        ).with_for_update())
+        if order_id is None:
+            raise ValueError("请选择有效订单")
+        cost = await ProjectCostService(self.db).create_cost({
+            "request_id": data["request_id"],
+            "order_id": str(order_id),
+            "amount": data["amount"],
+            "debt_amount": 0,
+            "category": data["category"],
+            "summary": data["summary"],
+            "cost_date": data["entry_date"].isoformat(),
+            "payment_account_id": str(account_id),
+            "payment_method": self._payment_method(account),
+            "supplier_id": str(data["supplier_id"]) if data.get("supplier_id") else None,
+            "payee_company_name": data.get("counterparty_name") or None,
+        }, created_by)
+        return cost, True
+
+    async def create_customer_receipt(self, account_id: UUID, data: dict, created_by: UUID):
+        from app.services.payment_service import PaymentService
+
+        await self._lock_business_request(data["request_id"])
+        existing = await self.db.scalar(select(Payment).where(Payment.request_id == data["request_id"]))
+        if existing:
+            if not self._same_business_movement(existing, account_id, existing.paid_at, data):
+                raise ValueError("该请求编号已用于另一笔客户收款")
+            return {"id": str(existing.id), "payment_no": existing.payment_no}, False
+        await self._assert_request_unclaimed(data["request_id"], ProjectCost, BankLedgerEntry)
+        account = await self._business_account(account_id, data["entry_date"])
+        customer_id = await self.db.scalar(select(BusinessDocument.customer_id).where(
+            BusinessDocument.id == data["order_id"],
+            BusinessDocument.doc_type == "order",
+            BusinessDocument.deleted_at.is_(None),
+        ))
+        if not customer_id:
+            raise ValueError("请选择已关联客户的有效订单")
+        receipt = await PaymentService(self.db).create_payment({
+            "request_id": data["request_id"],
+            "order_id": str(data["order_id"]),
+            "customer_id": str(customer_id),
+            "amount": data["amount"],
+            "payment_account_id": str(account_id),
+            "payment_method": self._payment_method(account),
+            "paid_at": data["entry_date"].isoformat(),
+            "remark": data["summary"],
+        }, created_by, allow_standalone=True)
+        return receipt, True
 
     @staticmethod
     def entry_payload(entry):

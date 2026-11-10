@@ -1,6 +1,6 @@
 import type { RouteLocationRaw } from 'vue-router'
 
-export function expenditureSourceTarget(row: { source_kind: string; source_id?: string; document_id?: string | null; document_type?: string | null }): RouteLocationRaw | null {
+export function expenditureSourceTarget(row: { source_kind: string; source_id?: string | null; document_id?: string | null; document_type?: string | null }): RouteLocationRaw | null {
   if (row.source_kind === 'project_cost' && row.document_id) {
     return row.document_type === 'quote'
       ? { name: 'QuoteCostDetail', params: { quoteId: row.document_id } }
