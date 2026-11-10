@@ -43,6 +43,7 @@ export type AccessKey =
   | 'projectCost'
   | 'costDebt'
   | 'companyAccount'
+  | 'bankLedger'
   | 'supplier'
   | 'outsourcePayment'
   | 'reports'
@@ -126,6 +127,7 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   projectCost: ['admin', 'finance'],
   costDebt: ['admin', 'finance'],
   companyAccount: ['admin', 'finance'],
+  bankLedger: ['admin', 'finance'],
   supplier: ['admin', 'finance', 'outsource_manager'],
   outsourcePayment: ['admin', 'finance'],
   reports: ['admin', 'sales', 'finance', 'manager'],
@@ -220,6 +222,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   // finance:view_cost 只代表成本字段可见，不能单独打开包含支出的应付台账。
   costDebt: ['expense:read'],
   companyAccount: ['company_account:read'],
+  bankLedger: { allOf: ['company_account:read', 'expense:read'] },
   supplier: { anyGroups: [['supplier_center:read', 'supplier:read'], ['outsource_center:read', 'outsource_vendor:read']] },
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
@@ -286,6 +289,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   FinanceCenterDashboard: 'finance',
   ExpenseList: 'expense',
   CompanyAccountList: 'companyAccount',
+  BankLedger: 'bankLedger',
   StatementList: 'statement',
   StatementDetail: 'statement',
   ProjectCostList: 'projectCost',
@@ -388,6 +392,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   TaskCompletionStats: '完成统计',
   ReceivablesView: '应收管理',
   ExpenseList: '支出',
+  BankLedger: '银行台账',
   StatementList: '客户对账',
   StatementDetail: '对账详情',
   ProjectCostList: '项目成本',
