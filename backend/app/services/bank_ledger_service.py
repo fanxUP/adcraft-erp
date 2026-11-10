@@ -112,7 +112,7 @@ class BankLedgerService:
                 "document_id": str(document_id) if document_id else None,
                 "document_type": "order" if document_id else None,
                 "entry_date": row_date.isoformat(),
-                "summary": (receipt["remark"] or receipt["payment_no"]) if can_read_receipts else "客户收款",
+                "summary": (receipt["remark"] or "") if can_read_receipts else "",
                 "counterparty_account": None,
                 "counterparty_name": receipt["customer_name"] if can_read_receipts else None,
                 "category": "客户收款",
@@ -141,7 +141,7 @@ class BankLedgerService:
                 "document_id": str(payment["document_id"]) if payment["document_id"] else None,
                 "document_type": payment["document_type"],
                 "entry_date": row_date.isoformat(),
-                "summary": payment.get("description") or payment.get("source_no") or "已登记付款",
+                "summary": payment.get("description") or "",
                 "counterparty_account": None,
                 "counterparty_name": payment.get("supplier_name"),
                 "category": payment.get("category"),
@@ -319,9 +319,6 @@ class BankLedgerService:
         for key in ("counterparty_account", "counterparty_name", "category", "project_name", "department"):
             if values.get(key) == "":
                 values[key] = None
-        if not values.get("summary"):
-            raise ValueError("摘要不能为空")
-
         supplier_id = values.get("counterparty_supplier_id")
         if supplier_id:
             supplier = await self.db.scalar(select(OutsourceVendor).where(

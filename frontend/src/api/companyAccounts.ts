@@ -30,7 +30,7 @@ export interface BankLedgerRow {
   document_id?: string | null
   document_type?: string | null
   entry_date: string
-  summary: string
+  summary: string | null
   counterparty_account: string | null
   counterparty_name: string | null
   counterparty_supplier_id?: string | null
@@ -72,7 +72,7 @@ export interface BankLedgerEntryCreate {
   entry_date: string
   direction: 'income' | 'expense'
   amount: number
-  summary: string
+  summary?: string
   counterparty_account?: string
   counterparty_name?: string
   counterparty_supplier_id?: string
@@ -94,7 +94,7 @@ export const setBankLedgerOpeningBalance = (
   data: { entry_date: string; amount: number },
 ) => put<{ entry_date: string; amount: number }>('/company-accounts/' + accountId + '/opening-balance', data)
 export const createBankLedgerEntry = (accountId: string, data: BankLedgerEntryCreate) =>
-  post<{ id: string; account_id: string; entry_type: string; direction: string; entry_date: string; amount: number; summary: string }>(
+  post<{ id: string; account_id: string; entry_type: string; direction: string; entry_date: string; amount: number; summary: string | null }>(
     '/company-accounts/' + accountId + '/ledger-entries',
     data,
   )
