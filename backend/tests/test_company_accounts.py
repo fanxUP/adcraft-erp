@@ -16,6 +16,7 @@ from app.models.company_account import CompanyAccount
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
 from app.services.company_account_service import CompanyAccountService
+from app.services.bank_ledger_service import BankLedgerService
 from app.services.expenditure_service import ExpenditureFilters
 from app.services.outsource_service import OutsourceService
 from app.services.payable_service import PayableService
@@ -88,6 +89,53 @@ async def test_initial_then_partial_payments_partition_without_changing_source_t
     after = await expenditure.list_records("disbursements", filters=ExpenditureFilters(payment_account_id=UUID(later["id"])))
     assert after["total"] == 0
     assert (await db.get(Expense, source_id)).amount == Decimal("1000.00")
+
+
+async def test_outstanding_payables_excludes_fully_paid_and_keeps_partial_sources(fixture_db):
+    db, _, _ = fixture_db
+    account = await cash(db, "应付测试账户")
+    expense_service = ExpenseService(db)
+    payable_service = PayableService(db)
+    unpaid = await expense_service.create_expense({"paid_amount": 0, "payable_amount": 80}, None)
+    partial = await expense_service.create_expense({
+        "paid_amount": 20, "payable_amount": 80,
+        "payment_account_id": account["id"], "expense_date": "2026-10-01",
+    }, None)
+    paid = await expense_service.create_expense({"paid_amount": 0, "payable_amount": 30}, None)
+    await payable_service.register_payment("expense", UUID(paid["id"]), {
+        "request_id": uuid4(), "amount": 30, "payment_account_id": account["id"],
+        "paid_at": "2026-10-02",
+    }, None)
+
+    rows, total = await payable_service.list_payables(1, 200, status="outstanding")
+    ids = {row["source_id"] for row in rows}
+    assert total == len(rows)
+    assert unpaid["id"] in ids
+    assert partial["id"] in ids
+    assert paid["id"] not in ids
+    assert next(row for row in rows if row["source_id"] == partial["id"])["remaining_amount"] == 80
+
+
+async def test_partial_expense_appears_as_cash_payment_and_outstanding_balance(fixture_db):
+    db, expenditure, _ = fixture_db
+    bank = await CompanyAccountService(db).save({
+        "name": "分类测试银行户", "account_type": "bank", "holder_name": "测试公司",
+        "bank_name": "测试银行", "account_number": "1234567890123456", "is_active": True,
+    }, full=True)
+    ledger = BankLedgerService(db, expenditure.viewer)
+    await ledger.set_opening_balance(UUID(bank["id"]), {"entry_date": datetime(2026, 9, 1).date(), "amount": 0}, None)
+    expense = await ExpenseService(db).create_expense({
+        "paid_amount": 300, "payable_amount": 700, "payment_account_id": bank["id"],
+        "expense_date": "2026-10-01", "category": "材料采购",
+    }, None)
+
+    cash = await ledger.get_ledger(UUID(bank["id"]))
+    payment = next(row for row in cash["items"] if row.get("source_id") == expense["id"])
+    payable = await PayableService(db).get_payable("expense", UUID(expense["id"]))
+    assert payment["source_label"] == "费用付款"
+    assert payment["expense_amount"] == 300
+    assert payment["balance"] == -300
+    assert payable["remaining_amount"] == 700
 
 
 async def test_new_cash_requires_account_but_all_unpaid_and_historical_notes_remain_valid(fixture_db):

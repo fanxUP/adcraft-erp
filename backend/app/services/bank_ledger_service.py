@@ -84,7 +84,16 @@ class BankLedgerService:
             rows.append({
                 "id": str(payment["row_key"]),
                 "entry_type": "source_payment",
-                "source_label": "ERP付款",
+                "source_label": {
+                    "expense": "费用付款",
+                    "project_cost": "项目成本付款",
+                    "outsource_task": "外协付款",
+                    "outsource_payment": "外协付款",
+                }.get(payment["source_kind"], "ERP付款"),
+                "source_kind": payment["source_kind"],
+                "source_id": str(payment["source_id"]),
+                "document_id": str(payment["document_id"]) if payment["document_id"] else None,
+                "document_type": payment["document_type"],
                 "entry_date": row_date.isoformat(),
                 "summary": payment.get("description") or payment.get("source_no") or "已登记付款",
                 "counterparty_account": None,

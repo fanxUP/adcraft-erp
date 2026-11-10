@@ -25,6 +25,10 @@ export interface BankLedgerRow {
   id: string
   entry_type: 'opening_balance' | 'source_payment' | 'manual'
   source_label: string
+  source_kind?: string
+  source_id?: string
+  document_id?: string | null
+  document_type?: string | null
   entry_date: string
   summary: string
   counterparty_account: string | null

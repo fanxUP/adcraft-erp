@@ -82,7 +82,7 @@ export interface ExpenditureResult {
 }
 export function getExpenditure(view: ExpenditureView, params: {
   page: number; page_size: number; source_type?: ExpenditureSource; keyword?: string
-  category?: string; supplier_id?: string; document_id?: string; payment_account_id?: string; account_unassigned?: boolean
+  category?: string; supplier_id?: string; document_id?: string; payment_account_id?: string; account_unassigned?: boolean; outstanding_only?: boolean
   start_date?: string; end_date?: string; date_status?: 'all' | 'confirmed' | 'unverified'
 }) {
   return get<ExpenditureResult>(`/expenses/${view}`, { params })

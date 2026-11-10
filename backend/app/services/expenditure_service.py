@@ -31,6 +31,7 @@ class ExpenditureFilters:
     date_status: str = "all"
     payment_account_id: UUID | None = None
     account_unassigned: bool = False
+    outstanding_only: bool = False
 
     def __post_init__(self):
         if self.source_type not in (None, "expense", "project_cost", "outsource"):
@@ -158,18 +159,17 @@ class ExpenditureService:
             amount, payable = _money(table.c.amount), _money(table.c[debt])
             inferred = func.greatest(amount - payable, 0)
             legacy = literal(0)
-            registered_paid = literal(0)
+            # The source date is the payment date for the upfront-paid amount
+            # on both expenses and project costs. Existing date reconciliations
+            # take precedence so the same historical money is counted once.
+            registered_paid = case(
+                (table.c[date_column].is_not(None), func.greatest(
+                    inferred - _money(legacy_allocations.c.allocated), 0,
+                )),
+                else_=0,
+            )
             if kind == "project_cost":
                 legacy = case((and_(table.c.is_settled.is_(True), _money(ps.c.history_count) == 0), payable), else_=0)
-                # The amount paid when a project cost is registered uses its selected cost date.
-                # Any existing reconciliation allocation takes precedence over this inferred date
-                # so historical records remain additive rather than double-counted.
-                registered_paid = case(
-                    (table.c[date_column].is_not(None), func.greatest(
-                        inferred - _money(legacy_allocations.c.allocated), 0,
-                    )),
-                    else_=0,
-                )
             undated = func.greatest(
                 inferred + legacy - _money(legacy_allocations.c.allocated) - registered_paid,
                 0,
@@ -420,6 +420,8 @@ class ExpenditureService:
                 conditions.append(table.c.payment_account_id == filters.payment_account_id)
             if filters.account_unassigned:
                 conditions.append(table.c.payment_account_id.is_(None))
+        elif filters.outstanding_only:
+            conditions.append(table.c.remaining_amount > 0)
         if filters.keyword and filters.keyword.strip():
             conditions.append(or_(*(table.c[k].contains(filters.keyword.strip(), autoescape=True)
                                    for k in ("source_no", "doc_no", "project_name", "supplier_name", "description"))))
@@ -442,6 +444,8 @@ class ExpenditureService:
             raise ValueError("列表参数无效")
         if view == "ledger" and (filters.payment_account_id or filters.account_unassigned):
             raise ValueError("付款账户筛选仅适用于付款记录")
+        if view == "disbursements" and filters.outstanding_only:
+            raise ValueError("待付筛选仅适用于业务台账")
         ledger = self._ledger()
         if view == "ledger":
             table = select(*(
@@ -511,7 +515,8 @@ class ExpenditureService:
             conditions.append(table.c.paid_at >= datetime.combine(start_date, datetime.min.time()))
         columns = (
             "row_key", "source_type", "source_kind", "source_id", "source_no",
-            "project_name", "department", "supplier_name", "category", "description",
+            "document_id", "document_type", "project_name", "department",
+            "supplier_name", "category", "description",
             "amount", "paid_at",
         )
         records = (await self.db.execute(

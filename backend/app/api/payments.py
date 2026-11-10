@@ -276,13 +276,15 @@ async def list_expenditure(
     end_date: date | None = None,
     payment_account_id: UUID | None = None,
     account_unassigned: bool = False,
+    outstanding_only: bool = False,
     date_status: Literal["all", "confirmed", "unverified"] = "all",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     try:
         filters = ExpenditureFilters(source_type, keyword, category, supplier_id,
-                                     document_id, start_date, end_date, date_status, payment_account_id, account_unassigned)
+                                     document_id, start_date, end_date, date_status, payment_account_id,
+                                     account_unassigned, outstanding_only)
         view = "ledger" if request.url.path.endswith("/ledger") else "disbursements"
         return success(await ExpenditureService(db, current_user).list_records(view, page, page_size, filters))
     except PermissionError as exc:

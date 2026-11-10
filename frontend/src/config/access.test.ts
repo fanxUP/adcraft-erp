@@ -142,6 +142,14 @@ describe('page access matrix', () => {
     expect(canAccess('statement', ['custom'], ['expense:read'])).toBe(false)
   })
 
+  it('keeps payment records reachable for expense readers after moving the menu', () => {
+    expect(findNavigationItem('/expenses')).toBeUndefined()
+    expect(findNavigationItem('/bank-ledger')?.accessKey).toBe('bankLedger')
+    expect(canAccessRoute('BankLedger', ['custom'], [], ['expense:read'])).toBe(true)
+    expect(canAccessRoute('BankLedger', ['custom'], [], ['company_account:ledger_read'])).toBe(false)
+    expect(canAccessRoute('CostDebtList', ['custom'], [], ['expense:read'])).toBe(true)
+  })
+
   it('connects resource-center page access to explicit server permissions', () => {
     const vehiclePermissions = ['resource_center:read', 'vehicle:read']
     const aerialPermissions = ['resource_center:read', 'aerial:read']

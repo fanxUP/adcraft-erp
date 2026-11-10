@@ -4,6 +4,15 @@
       <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看收支流水与账面余额。" />
     </template>
 
+    <el-tabs v-model="activeSection" aria-label="银行台账分类" class="bank-ledger-sections">
+      <el-tab-pane v-if="canReadAccounts" label="账户流水" name="accounts" />
+      <el-tab-pane v-if="canReadPayments" label="付款记录" name="payments" />
+      <el-tab-pane v-if="canReadPayments" label="待归户付款" name="unassigned" />
+      <el-tab-pane v-if="canReadPayments" label="日期待核实" name="undated" />
+    </el-tabs>
+
+    <template v-if="activeSection === 'accounts'">
+
     <StatePanel v-if="accountsLoading" state="loading" title="正在加载账户" />
     <StatePanel
       v-else-if="accountsError"
@@ -32,6 +41,11 @@
             </p>
             <div class="bank-ledger-buttons">
               <el-button v-if="canSetOpeningBalance" :disabled="loading || !result" @click="openOpeningBalance(account)">期初余额</el-button>
+              <el-button
+                v-if="auth.can('expense:create')"
+                :disabled="loading || !result?.opening_balance || !account.is_active"
+                @click="openExpenseCreate(account)"
+              >登记费用付款</el-button>
               <el-tooltip
                 v-if="canCreateEntry && (!result?.opening_balance || !account.is_active)"
                 :content="!account.is_active ? '停用账户不能登记新流水' : '请先设置期初余额后登记流水'"
@@ -93,6 +107,12 @@
               <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.department || '—' }}</template>
               </el-table-column>
+              <el-table-column label="操作" width="105" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
               <template #empty>
                 <StatePanel v-if="loading" state="loading" title="正在加载账户流水" />
                 <StatePanel v-else-if="loadError" state="error" title="账户流水加载失败" action-label="重试" @action="loadLedger" />
@@ -115,6 +135,30 @@
         </template>
       </el-tab-pane>
     </el-tabs>
+    </template>
+
+    <section v-else-if="canReadPayments" aria-label="待核对付款">
+      <el-alert
+        v-if="activeSection === 'payments'"
+        title="按实际付款流水查看费用、项目成本和外协付款，包含现金及其他公司账户；各银行账户余额仍以账户流水为准。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-alert
+        v-else
+        :title="activeSection === 'unassigned' ? '这些已付款尚未关联公司账户，不参与账户余额计算。补录付款账户后会进入对应账户。' : '这些历史已付款缺少可核实的日期，不参与账户余额计算。核实实际付款日期后会进入对应账户。'"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <ExpenditureTable
+        view="disbursements"
+        :refresh-key="0"
+        :payment-queue="activeSection === 'unassigned' ? 'unassigned' : activeSection === 'undated' ? 'undated' : undefined"
+        @manage-expense="openExpenseSource"
+      />
+    </section>
 
     <el-dialog
       v-model="openingDialogVisible"
@@ -265,6 +309,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   accountTypeLabels,
@@ -278,6 +323,7 @@ import {
   type BankLedgerOrderOption,
   type BankLedgerSupplierOption,
   type CompanyAccount,
+  type BankLedgerRow,
 } from '@/api/companyAccounts'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -285,12 +331,42 @@ import { businessToday } from '@/utils/datetime'
 import { getErrorMessage } from '@/utils/error'
 import { newRequestId } from '@/utils/requestId'
 import { latestRequest } from '@/utils/expenditure'
+import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
+import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const EXPENSE_CATEGORIES = ['手续费', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他支出']
 const INCOME_CATEGORIES = ['客户收款（台账补录）', '利息收入', '其他收入']
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const canReadPayments = computed(() => auth.can('expense:read'))
+const canReadAccounts = computed(() => auth.canAll(['company_account:read', 'expense:read', 'company_account:ledger_read']))
+type LedgerSection = 'accounts' | 'payments' | 'unassigned' | 'undated'
+const activeSection = computed<LedgerSection>({
+  get: () => {
+    const section = route.query.section
+    if (!canReadAccounts.value && section !== 'unassigned' && section !== 'undated') return 'payments'
+    return section === 'payments' || section === 'unassigned' || section === 'undated' ? section : 'accounts'
+  },
+  set: section => { void router.replace({ path: '/bank-ledger', query: section === 'accounts' ? {} : { section } }) },
+})
+function openExpenseSource(id: string) {
+  void router.push({ path: '/expenses', query: { expense_id: id, return_to: 'bank' } })
+}
+function openExpenseCreate(account: CompanyAccount) {
+  void router.push({ path: '/expenses', query: { action: 'create', account_id: account.id, return_to: 'bank' } })
+}
+function canOpenCashSource(row: BankLedgerRow) {
+  return row.source_kind === 'expense' && !!row.source_id
+    || !!(row.source_kind && row.source_id && expenditureSourceTarget(row as BankLedgerRow & { source_kind: string }))
+}
+function openCashSource(row: BankLedgerRow) {
+  if (row.source_kind === 'expense' && row.source_id) return openExpenseSource(row.source_id)
+  const target = row.source_kind && row.source_id ? expenditureSourceTarget(row as BankLedgerRow & { source_kind: string }) : null
+  if (target) void router.push(target)
+}
 const canCreateEntry = computed(() => auth.can('company_account:ledger_create'))
 const canSetOpeningBalance = computed(() => auth.can('company_account:opening_balance_set'))
 const accounts = shallowRef<CompanyAccount[]>([])
@@ -542,7 +618,7 @@ async function submitEntry() {
 }
 
 watch([activeAccountId, page], loadLedger)
-onMounted(loadAccounts)
+onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
 </script>
 
 <style scoped>

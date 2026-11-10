@@ -104,6 +104,12 @@ async def test_principal_once_partial_payments_and_full_page_summary(fixture_db)
     outsource = await svc.list_records("ledger", filters=ExpenditureFilters(source_type="outsource"))
     task = next(row for row in outsource["items"] if row["source_kind"] == "outsource_task")
     assert task["last_payment_date"] == "2026-10-08T00:00:00"
+    external_outstanding = await svc.list_records(
+        "ledger", filters=ExpenditureFilters(source_type="outsource", outstanding_only=True),
+    )
+    assert external_outstanding["total"] == 1
+    assert external_outstanding["items"][0]["source_id"] == str(ids["task"])
+    assert external_outstanding["items"][0]["remaining_amount"] == 1500
     page2 = await svc.list_records("ledger", page=2, page_size=1)
     assert page2["summary"] == result["summary"]
     assert page2["items"][0]["row_key"] != result["items"][0]["row_key"]
@@ -153,7 +159,7 @@ async def test_ledger_period_filter_uses_latest_payment_date_and_returns_departm
     ))
     await db.execute(sa.insert(Expense.__table__).values(
         id=undated_expense_id, expense_no="TEST-EXPENSE-UNDATED", amount=1000,
-        payable_amount=600, expense_date=datetime(2026, 10, 8), category="办公",
+        payable_amount=600, expense_date=None, category="办公",
     ))
     await db.commit()
 
