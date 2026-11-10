@@ -79,7 +79,7 @@
                     <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
                       {{ row.source_label }}
                     </el-tag>
-                    <span>{{ row.summary || '—' }}</span>
+                    <span>{{ row.summary || '' }}</span>
                   </div>
                 </template>
               </el-table-column>
@@ -236,8 +236,8 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="摘要" prop="summary" required>
-          <el-input v-model="entryForm.summary" maxlength="255" placeholder="例如：银行利息、账户手续费" />
+        <el-form-item label="摘要（选填）" prop="summary">
+          <el-input v-model="entryForm.summary" maxlength="255" placeholder="自行填写；不填写则留空" />
         </el-form-item>
         <el-row v-if="entryPurpose !== 'receipt'" :gutter="16">
           <el-col :xs="24" :sm="12">
@@ -444,7 +444,6 @@ const entryRules = {
   entry_date: [{ required: true, message: '请选择日期', trigger: 'change' }],
   direction: [{ required: true, message: '请选择收支方向', trigger: 'change' }],
   amount: [{ required: true, type: 'number', min: 0.01, message: '金额必须大于零', trigger: 'change' }],
-  summary: [{ required: true, whitespace: true, message: '请填写摘要', trigger: 'blur' }],
 }
 
 function accountTabLabel(account: CompanyAccount) {

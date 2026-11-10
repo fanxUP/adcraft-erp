@@ -42,7 +42,7 @@ class BankLedgerEntryCreate(BaseModel):
     entry_date: date
     direction: Literal["income", "expense"]
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    summary: str = Field(min_length=1, max_length=255)
+    summary: str = Field(default="", max_length=255)
     counterparty_account: str | None = Field(default=None, max_length=200)
     counterparty_name: str | None = Field(default=None, max_length=255)
     counterparty_supplier_id: UUID | None = None
@@ -58,7 +58,7 @@ class BankProjectCostCreate(BaseModel):
     order_id: UUID
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     category: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
-    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] = ""
     supplier_id: UUID | None = None
     counterparty_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
 
@@ -68,4 +68,4 @@ class BankCustomerReceiptCreate(BaseModel):
     entry_date: date
     order_id: UUID
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] = ""
