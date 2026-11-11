@@ -233,6 +233,7 @@ class BankLedgerService:
         balance = opening_amount
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
+        daily_totals = {}
         monthly_totals = {}
         yearly_totals = {}
         transaction_count = 0
@@ -245,6 +246,11 @@ class BankLedgerService:
                 expense = self._money(row["expense_amount"])
                 income_total += income
                 expense_total += expense
+                daily_total = daily_totals.setdefault(row["entry_date"], {
+                    "income_amount": MONEY_ZERO,
+                    "expense_amount": MONEY_ZERO,
+                    "balance": None,
+                })
                 month_key = row["entry_date"][:7]
                 month_total = monthly_totals.setdefault(month_key, {
                     "income_amount": MONEY_ZERO,
@@ -261,9 +267,12 @@ class BankLedgerService:
                 month_total["expense_amount"] += expense
                 year_total["income_amount"] += income
                 year_total["expense_amount"] += expense
+                daily_total["income_amount"] += income
+                daily_total["expense_amount"] += expense
                 if balance is not None:
                     balance += income - expense
                     row["balance"] = balance
+                daily_total["balance"] = balance
                 month_total["balance"] = balance
                 year_total["balance"] = balance
             row["income_amount"] = self._amount_value(row["income_amount"])
@@ -326,6 +335,24 @@ class BankLedgerService:
                 for row_date in month_dates:
                     day_rows = sorted(rows_by_date[row_date], key=daily_balance_order)
                     display_rows.extend(day_rows)
+                    daily_total = daily_totals.get(row_date)
+                    if daily_total is not None and daily_total["balance"] is not None:
+                        display_rows.append({
+                            "id": f"daily-balance:{row_date}",
+                            "entry_type": "daily_balance",
+                            "source_label": "当日余额",
+                            "entry_date": row_date,
+                            "summary": "",
+                            "remark": None,
+                            "counterparty_account": None,
+                            "counterparty_name": None,
+                            "category": None,
+                            "income_amount": MONEY_ZERO,
+                            "expense_amount": MONEY_ZERO,
+                            "balance": self._amount_value(daily_total["balance"]),
+                            "project_name": None,
+                            "department": None,
+                        })
         rows = display_rows
         for row in rows:
             row.pop("_sort", None)
