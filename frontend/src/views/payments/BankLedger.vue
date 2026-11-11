@@ -73,14 +73,14 @@
               <el-table-column label="日期" width="115">
                 <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? row.year_label : row.entry_type === 'monthly_total' ? row.month_label : row.entry_date }}</template>
               </el-table-column>
-              <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? '本年合计' : row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
-              </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
                 <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.counterparty_name || '—' }}</template>
               </el-table-column>
               <el-table-column prop="category" label="分类" min-width="110" show-overflow-tooltip>
                 <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.category || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? '本年合计' : row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
               </el-table-column>
               <el-table-column label="收入金额" min-width="115" align="right">
                 <template #default="{ row }">{{ isLedgerTotal(row) || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
