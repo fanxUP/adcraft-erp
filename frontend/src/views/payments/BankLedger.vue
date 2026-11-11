@@ -351,7 +351,7 @@ import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const EXPENSE_CATEGORIES = ['张江', '过账', '高空作业车', '员工社保', '员工工资', '居间费', '手续费', '餐费/交通费', '车辆加油/维修', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '还款', '其他支出']
-const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入', '借款', '过账']
+const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入', '借款', '张江', '过账']
 const COST_CATEGORIES = ['人工/工时费', '员工工资', '员工社保', '材料费', '租赁费', '高空作业车', '运输/物流费', '车辆加油/维修', '安装杂费', '办公费', '居间费', '手续费', '餐费/交通费', '差旅费', '其他']
 type CounterpartySuggestion = {
   id: string
