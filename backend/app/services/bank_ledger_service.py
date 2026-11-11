@@ -223,10 +223,12 @@ class BankLedgerService:
         def daily_balance_order(row):
             if row["entry_type"] == "opening_balance":
                 flow_order = 0
-            elif self._money(row["income_amount"]) > MONEY_ZERO:
+            elif self._money(row["expense_amount"]) > MONEY_ZERO:
                 flow_order = 1
-            else:
+            elif self._money(row["income_amount"]) > MONEY_ZERO:
                 flow_order = 2
+            else:
+                flow_order = 3
             return flow_order, row["_sort"][2], row["_sort"][3]
 
         rows.sort(key=lambda row: (row["entry_date"], *daily_balance_order(row)))
