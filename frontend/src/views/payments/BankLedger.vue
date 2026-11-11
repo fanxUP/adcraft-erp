@@ -104,9 +104,13 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="105" fixed="right">
+              <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
-                  <el-button v-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
+                  <div v-if="row.entry_type === 'manual' && canCreateEntry" class="ledger-row-actions">
+                    <el-button text type="primary" :disabled="mutating" @click="openEditEntry(account, row)">编辑</el-button>
+                    <el-button text type="danger" :disabled="mutating" @click="deleteManualEntry(account, row)">删除</el-button>
+                  </div>
+                  <el-button v-else-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
@@ -185,19 +189,19 @@
 
     <el-dialog
       v-model="entryDialogVisible"
-      :title="(entryTarget?.name || '') + ' · 登记台账'"
+      :title="(entryTarget?.name || '') + (entryEditingId ? ' · 编辑手工流水' : ' · 登记台账')"
       width="min(94vw, 680px)"
       :close-on-click-modal="false"
       @closed="resetEntryForm"
     >
       <el-alert
         class="dialog-note"
-        :type="entryPurpose === 'manual' ? 'warning' : 'info'"
+        :type="entryEditingId || entryPurpose === 'manual' ? 'warning' : 'info'"
         :closable="false"
-        :title="entryPurposeHint"
+        :title="entryEditingId ? '修改日期、收支方向或金额会重新计算该账户后续余额。' : entryPurposeHint"
       />
       <el-form ref="entryFormRef" :model="entryForm" :rules="entryRules" label-position="top" class="entry-form">
-        <el-form-item label="登记类型" required>
+        <el-form-item v-if="!entryEditingId" label="登记类型" required>
           <el-select v-model="entryPurpose" style="width: 100%" @change="resetEntryPurposeFields">
             <el-option label="手工收支" value="manual" />
             <el-option v-if="canCreateProjectCost" label="项目成本付款" value="project_cost" />
@@ -306,7 +310,7 @@
       </el-form>
       <template #footer>
         <el-button @click="entryDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitEntry">{{ entryPurpose === 'receipt' ? '登记收款' : entryPurpose === 'project_cost' ? '登记付款' : '登记流水' }}</el-button>
+        <el-button type="primary" :loading="mutating" @click="submitEntry">{{ entryEditingId ? '保存修改' : entryPurpose === 'receipt' ? '登记收款' : entryPurpose === 'project_cost' ? '登记付款' : '登记流水' }}</el-button>
       </template>
     </el-dialog>
   </AppPage>
@@ -321,11 +325,14 @@ import {
   createBankCustomerReceipt,
   createBankLedgerEntry,
   createBankProjectCost,
+  deleteBankLedgerEntry,
   getBankLedger,
   getBankLedgerOrderOptions,
   getBankLedgerSupplierOptions,
   getCompanyAccountOptions,
   setBankLedgerOpeningBalance,
+  updateBankLedgerEntry,
+  type BankLedgerEntryUpdate,
   type BankLedgerResult,
   type BankLedgerOrderOption,
   type BankLedgerPurpose,
@@ -352,6 +359,11 @@ type CounterpartySuggestion = {
   value: string
   source: 'supplier' | 'company_account'
   sourceLabel: string
+}
+type EntryBalanceSnapshot = {
+  entry_date: string
+  direction: 'income' | 'expense'
+  amount: number
 }
 
 const auth = useAuthStore()
@@ -410,6 +422,8 @@ const openingFormRef = ref<FormInstance>()
 const openingForm = reactive({ entry_date: '', amount: null as number | null })
 const entryDialogVisible = ref(false)
 const entryTarget = ref<CompanyAccount | null>(null)
+const entryEditingId = ref('')
+const entryBalanceSnapshot = shallowRef<EntryBalanceSnapshot | null>(null)
 const entryFormRef = ref<FormInstance>()
 const entryPurpose = ref<BankLedgerPurpose>('manual')
 const entryForm = reactive({
@@ -565,7 +579,76 @@ function openEntry(account: CompanyAccount) {
   entryFormRef.value?.clearValidate()
 }
 
+function openEditEntry(account: CompanyAccount, row: BankLedgerRow) {
+  if (row.entry_type !== 'manual' || !canCreateEntry.value) return
+  resetEntryForm()
+  entryTarget.value = account
+  entryEditingId.value = row.id
+  entryPurpose.value = 'manual'
+  entryForm.entry_date = row.entry_date
+  const direction = row.income_amount > 0 ? 'income' : 'expense'
+  const amount = direction === 'income' ? row.income_amount : row.expense_amount
+  entryForm.direction = direction
+  entryForm.amount = amount
+  entryForm.summary = row.summary || ''
+  entryForm.counterparty_account = row.counterparty_account || ''
+  entryForm.counterparty_name = row.counterparty_name || ''
+  entryForm.counterparty_supplier_id = row.counterparty_supplier_id || ''
+  entryForm.category = row.category || ''
+  entryForm.project_name = row.project_name || ''
+  entryForm.department = row.department || ''
+  entryForm.order_id = row.order_id || ''
+  selectedCounterpartyName.value = entryForm.counterparty_name
+  entryBalanceSnapshot.value = {
+    entry_date: row.entry_date,
+    direction,
+    amount,
+  }
+  if (row.order_id) {
+    orderOptions.value = [{
+      id: row.order_id,
+      doc_no: '当前关联订单',
+      project_name: row.project_name || '未设置项目',
+      department: row.department,
+    }]
+    void searchOrderOptions(row.project_name || '')
+  }
+  entryDialogVisible.value = true
+  entryFormRef.value?.clearValidate()
+}
+
+async function deleteManualEntry(account: CompanyAccount, row: BankLedgerRow) {
+  if (mutating.value || row.entry_type !== 'manual' || !canCreateEntry.value) return
+  const direction = row.income_amount > 0 ? '收入' : '支出'
+  const amount = row.income_amount > 0 ? row.income_amount : row.expense_amount
+  const summary = row.summary?.trim() || '无摘要'
+  mutating.value = true
+  try {
+    const confirmed = await ElMessageBox.confirm(
+      `将删除 ${row.entry_date} 的手工${direction}流水：${summary}，金额 ${formatMoney(amount)}。删除后该账户流水余额会重新计算。此操作不会删除来源业务记录。`,
+      '确认删除手工流水',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' },
+    ).then(() => true).catch(() => false)
+    if (!confirmed) return
+
+    await deleteBankLedgerEntry(account.id, row.id)
+    ElMessage.success('手工流水已删除，账户余额已重新计算')
+    const nextTotal = (result.value?.total ?? 1) - 1
+    if (page.value > 1 && nextTotal <= (page.value - 1) * pageSize) {
+      page.value -= 1
+    } else {
+      await loadLedger()
+    }
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '删除手工流水失败'))
+  } finally {
+    mutating.value = false
+  }
+}
+
 function resetEntryForm() {
+  entryEditingId.value = ''
+  entryBalanceSnapshot.value = null
   entryPurpose.value = 'manual'
   entryForm.request_id = newRequestId()
   entryForm.entry_date = businessToday()
@@ -663,19 +746,50 @@ function selectOrder(orderId: string | undefined) {
 }
 
 async function submitEntry() {
-  if (mutating.value || !entryTarget.value || !await entryFormRef.value?.validate().catch(() => false)) return
-  if (entryForm.amount === null || entryForm.amount <= 0) return
+  if (mutating.value || !entryTarget.value) return
   const accountId = entryTarget.value.id
-  const payload = {
-    request_id: entryForm.request_id,
-    entry_date: entryForm.entry_date,
-    amount: entryForm.amount,
-    summary: entryForm.summary.trim(),
-    order_id: entryForm.order_id,
-  }
   mutating.value = true
   try {
-    if (entryPurpose.value === 'project_cost') {
+    if (!await entryFormRef.value?.validate().catch(() => false)) return
+    if (entryForm.amount === null || entryForm.amount <= 0) return
+    const manualPayload: BankLedgerEntryUpdate = {
+      entry_date: entryForm.entry_date,
+      direction: entryForm.direction,
+      amount: entryForm.amount,
+      summary: entryForm.summary.trim(),
+      counterparty_account: entryForm.counterparty_account.trim() || undefined,
+      counterparty_name: entryForm.counterparty_name.trim() || undefined,
+      counterparty_supplier_id: entryForm.counterparty_supplier_id || undefined,
+      category: entryForm.category.trim() || undefined,
+      project_name: entryForm.project_name.trim() || undefined,
+      department: entryForm.department.trim() || undefined,
+      order_id: entryForm.order_id || undefined,
+    }
+    const original = entryBalanceSnapshot.value
+    if (entryEditingId.value && original && (
+      original.entry_date !== manualPayload.entry_date
+      || original.direction !== manualPayload.direction
+      || original.amount !== manualPayload.amount
+    )) {
+      const confirmed = await ElMessageBox.confirm(
+        '修改日期、收支方向或金额后，该流水将重新参与余额计算，账户后续余额也会随之变化。',
+        '确认修改流水金额信息',
+        { type: 'warning', confirmButtonText: '确认修改', cancelButtonText: '取消' },
+      ).then(() => true).catch(() => false)
+      if (!confirmed) return
+    }
+
+    const payload = {
+      request_id: entryForm.request_id,
+      entry_date: entryForm.entry_date,
+      amount: entryForm.amount,
+      summary: entryForm.summary.trim(),
+      order_id: entryForm.order_id,
+    }
+    if (entryEditingId.value) {
+      await updateBankLedgerEntry(accountId, entryEditingId.value, manualPayload)
+      ElMessage.success('手工流水已更新，账户余额已重新计算')
+    } else if (entryPurpose.value === 'project_cost') {
       await createBankProjectCost(accountId, {
         ...payload,
         category: entryForm.category.trim(),
@@ -688,15 +802,8 @@ async function submitEntry() {
       ElMessage.success('收款已登记，应收账款已更新')
     } else {
       await createBankLedgerEntry(accountId, {
-        ...payload,
-        direction: entryForm.direction,
-        counterparty_account: entryForm.counterparty_account.trim() || undefined,
-        counterparty_name: entryForm.counterparty_name.trim() || undefined,
-        counterparty_supplier_id: entryForm.counterparty_supplier_id || undefined,
-        category: entryForm.category.trim() || undefined,
-        project_name: entryForm.project_name.trim() || undefined,
-        department: entryForm.department.trim() || undefined,
-        order_id: payload.order_id || undefined,
+        ...manualPayload,
+        request_id: entryForm.request_id,
       })
       ElMessage.success('台账流水已登记')
     }
@@ -704,7 +811,7 @@ async function submitEntry() {
     page.value = 1
     await loadLedger()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '登记台账失败'))
+    ElMessage.error(getErrorMessage(error, entryEditingId.value ? '编辑台账流水失败' : '登记台账失败'))
   } finally {
     mutating.value = false
   }
@@ -733,6 +840,8 @@ onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
   margin-bottom: var(--ui-space-4);
 }
 .bank-ledger-buttons { display: flex; flex: 0 0 auto; gap: var(--ui-space-2); }
+.ledger-row-actions { display: flex; align-items: center; gap: var(--ui-space-2); }
+.ledger-row-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .bank-ledger-hint, .bank-ledger-note {
   margin: 0;
   color: var(--ui-text-secondary);

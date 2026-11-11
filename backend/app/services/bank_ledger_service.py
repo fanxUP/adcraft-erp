@@ -37,6 +37,24 @@ class BankLedgerService:
     def _amount_value(value):
         return float(BankLedgerService._money(value))
 
+    @staticmethod
+    def audit_snapshot(entry):
+        """Capture financial fields without copying counterparty account numbers."""
+        return {
+            "account_id": str(entry.account_id),
+            "entry_type": entry.entry_type,
+            "entry_date": entry.entry_date.isoformat(),
+            "direction": entry.direction,
+            "amount": BankLedgerService._amount_value(entry.amount),
+            "summary": entry.summary,
+            "counterparty_name": entry.counterparty_name,
+            "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
+            "category": entry.category,
+            "project_name": entry.project_name,
+            "department": entry.department,
+            "order_id": str(entry.order_id) if entry.order_id else None,
+        }
+
     async def _account(self, account_id, *, lock=False):
         query = select(CompanyAccount).where(CompanyAccount.id == account_id)
         if lock:
@@ -366,6 +384,101 @@ class BankLedgerService:
         self.db.add(entry)
         await self.db.flush()
         return entry, True
+
+    async def update_entry(self, account_id: UUID, entry_id: UUID, data: dict):
+        await self._account(account_id, lock=True)
+        entry = await self.db.scalar(select(BankLedgerEntry).where(
+            BankLedgerEntry.id == entry_id,
+            BankLedgerEntry.account_id == account_id,
+            BankLedgerEntry.entry_type == "manual",
+        ).with_for_update())
+        if entry is None:
+            raise ValueError("手工台账流水不存在或不可编辑")
+
+        opening = await self.db.scalar(select(BankLedgerEntry).where(
+            BankLedgerEntry.account_id == account_id,
+            BankLedgerEntry.entry_type == "opening_balance",
+        ))
+        if opening is None:
+            raise ValueError("账户期初余额不存在，不能编辑手工流水")
+
+        values = {
+            key: value.strip() if isinstance(value, str) else value
+            for key, value in data.items()
+        }
+        for key in (
+            "counterparty_account", "counterparty_name", "category",
+            "project_name", "department",
+        ):
+            if values.get(key) == "":
+                values[key] = None
+
+        entry_date = values["entry_date"]
+        if entry_date > self._today():
+            raise ValueError("流水日期不能晚于今天")
+        if entry_date < opening.entry_date:
+            raise ValueError("流水日期不能早于期初日期")
+
+        supplier_id = values.get("counterparty_supplier_id")
+        if supplier_id:
+            supplier = await self.db.scalar(select(OutsourceVendor).where(
+                OutsourceVendor.id == supplier_id,
+                OutsourceVendor.deleted_at.is_(None),
+                OutsourceVendor.is_active.is_(True),
+            ))
+            if supplier is None:
+                if supplier_id != entry.counterparty_supplier_id:
+                    raise ValueError("供应商不存在或已停用，请重新选择")
+                values["counterparty_name"] = entry.counterparty_name
+            else:
+                values["counterparty_name"] = supplier.name
+
+        order_id = values.get("order_id")
+        if order_id:
+            if order_id == entry.order_id:
+                order = await self.db.scalar(select(BusinessDocument).where(
+                    BusinessDocument.id == order_id,
+                    BusinessDocument.doc_type == "order",
+                ))
+            else:
+                order = await self.db.scalar(select(BusinessDocument).where(
+                    BusinessDocument.id == order_id,
+                    BusinessDocument.doc_type == "order",
+                    BusinessDocument.deleted_at.is_(None),
+                ))
+            if order is None:
+                raise ValueError("订单不存在或已删除，请重新选择")
+            values["project_name"] = order.project_name
+            values["department"] = order.department
+
+        before = self.audit_snapshot(entry)
+        entry.entry_date = entry_date
+        entry.direction = values["direction"]
+        entry.amount = self._money(values["amount"])
+        entry.summary = values["summary"]
+        entry.counterparty_account = values.get("counterparty_account")
+        entry.counterparty_name = values.get("counterparty_name")
+        entry.counterparty_supplier_id = supplier_id
+        entry.category = values.get("category")
+        entry.project_name = values.get("project_name")
+        entry.department = values.get("department")
+        entry.order_id = order_id
+        await self.db.flush()
+        return entry, before
+
+    async def delete_entry(self, account_id: UUID, entry_id: UUID):
+        await self._account(account_id, lock=True)
+        entry = await self.db.scalar(select(BankLedgerEntry).where(
+            BankLedgerEntry.id == entry_id,
+            BankLedgerEntry.account_id == account_id,
+            BankLedgerEntry.entry_type == "manual",
+        ).with_for_update())
+        if entry is None:
+            raise ValueError("手工台账流水不存在或不可删除")
+        before = self.audit_snapshot(entry)
+        await self.db.delete(entry)
+        await self.db.flush()
+        return before
 
     async def _lock_business_request(self, request_id: UUID):
         await self.db.execute(

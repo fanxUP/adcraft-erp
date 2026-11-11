@@ -23,6 +23,7 @@ from app.models.project_cost import ProjectCost
 from app.schemas.common import error, success
 from app.schemas.company_account import (
     BankLedgerEntryCreate,
+    BankLedgerEntryUpdate,
     BankProjectCostCreate,
     BankCustomerReceiptCreate,
     CompanyAccountCreate,
@@ -216,6 +217,51 @@ async def create_account_ledger_entry(
             },
         )
     return success(BankLedgerService.entry_payload(entry))
+
+
+@router.put("/{account_id}/ledger-entries/{entry_id}")
+async def update_account_ledger_entry(
+    account_id: UUID,
+    entry_id: UUID,
+    data: BankLedgerEntryUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
+):
+    try:
+        service = BankLedgerService(db, user)
+        entry, before = await service.update_entry(account_id, entry_id, data.model_dump())
+    except ValueError as exc:
+        return error(40001, str(exc))
+    await log_operation(
+        db, user.id, user.real_name or user.username, "bank_ledger_entry", entry.id,
+        "update",
+        ip_address=request.client.host if request.client else None,
+        before_data=before,
+        after_data=service.audit_snapshot(entry),
+    )
+    return success(BankLedgerService.entry_payload(entry))
+
+
+@router.delete("/{account_id}/ledger-entries/{entry_id}")
+async def delete_account_ledger_entry(
+    account_id: UUID,
+    entry_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_CREATE)),
+):
+    try:
+        before = await BankLedgerService(db, user).delete_entry(account_id, entry_id)
+    except ValueError as exc:
+        return error(40001, str(exc))
+    await log_operation(
+        db, user.id, user.real_name or user.username, "bank_ledger_entry", entry_id,
+        "delete",
+        ip_address=request.client.host if request.client else None,
+        before_data=before,
+    )
+    return success({"deleted": True})
 
 
 @router.post("/{account_id}/project-cost-payments")

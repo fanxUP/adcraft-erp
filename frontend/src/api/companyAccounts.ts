@@ -82,6 +82,7 @@ export interface BankLedgerEntryCreate {
   department?: string
   order_id?: string
 }
+export type BankLedgerEntryUpdate = Omit<BankLedgerEntryCreate, 'request_id'>
 type BankBusinessEntry = Pick<BankLedgerEntryCreate, 'request_id' | 'entry_date' | 'amount' | 'summary'> & { order_id: string }
 export type BankLedgerPurpose = 'manual' | 'project_cost' | 'receipt'
 export const getBankLedgerSupplierOptions = (keyword?: string) =>
@@ -99,6 +100,13 @@ export const createBankLedgerEntry = (accountId: string, data: BankLedgerEntryCr
     '/company-accounts/' + accountId + '/ledger-entries',
     data,
   )
+export const updateBankLedgerEntry = (accountId: string, entryId: string, data: BankLedgerEntryUpdate) =>
+  put<{ id: string; account_id: string; entry_type: string; direction: string; entry_date: string; amount: number; summary: string | null }>(
+    `/company-accounts/${accountId}/ledger-entries/${entryId}`,
+    data,
+  )
+export const deleteBankLedgerEntry = (accountId: string, entryId: string) =>
+  del<{ deleted: boolean }>(`/company-accounts/${accountId}/ledger-entries/${entryId}`)
 export const createBankProjectCost = (accountId: string, data: BankBusinessEntry & {
   category: string; supplier_id?: string; counterparty_name?: string
 }) => post<{ id: string; cost_no: string }>(`/company-accounts/${accountId}/project-cost-payments`, data)

@@ -52,6 +52,20 @@ class BankLedgerEntryCreate(BaseModel):
     order_id: UUID | None = None
 
 
+class BankLedgerEntryUpdate(BaseModel):
+    entry_date: date
+    direction: Literal["income", "expense"]
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    summary: str = Field(default="", max_length=255)
+    counterparty_account: str | None = Field(default=None, max_length=200)
+    counterparty_name: str | None = Field(default=None, max_length=255)
+    counterparty_supplier_id: UUID | None = None
+    category: str | None = Field(default=None, max_length=64)
+    project_name: str | None = Field(default=None, max_length=255)
+    department: str | None = Field(default=None, max_length=255)
+    order_id: UUID | None = None
+
+
 class BankProjectCostCreate(BaseModel):
     request_id: UUID
     entry_date: date
