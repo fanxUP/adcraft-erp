@@ -142,6 +142,39 @@ async def test_partial_expense_appears_as_cash_payment_and_outstanding_balance(f
     assert payable["remaining_amount"] == 700
 
 
+async def test_bank_ledger_same_day_income_sits_below_expenses_and_balances_calculate_bottom_up(fixture_db):
+    db, expenditure, _ = fixture_db
+    bank = await CompanyAccountService(db).save({
+        "name": "同日顺序测试银行户", "account_type": "bank", "holder_name": "测试公司",
+        "bank_name": "测试银行", "account_number": "1234567890123456", "is_active": True,
+    }, full=True)
+    account_id = UUID(bank["id"])
+    ledger = BankLedgerService(db, expenditure.viewer)
+    await ledger.set_opening_balance(account_id, {"entry_date": date(2026, 9, 2), "amount": 100}, None)
+    db.add_all([
+        BankLedgerEntry(
+            account_id=account_id, entry_type="manual", direction="expense",
+            entry_date=date(2026, 9, 2), amount=Decimal("30.00"), summary="当天支出",
+        ),
+        BankLedgerEntry(
+            account_id=account_id, entry_type="manual", direction="income",
+            entry_date=date(2026, 9, 2), amount=Decimal("50.00"), summary="当天收入",
+        ),
+    ])
+
+    result = await ledger.get_ledger(account_id)
+    same_day = [
+        row for row in result["items"]
+        if row["entry_type"] in {"manual", "opening_balance"} and row["entry_date"] == "2026-09-02"
+    ]
+
+    assert [(row["entry_type"], row["summary"]) for row in same_day] == [
+        ("manual", "当天支出"), ("manual", "当天收入"), ("opening_balance", ""),
+    ]
+    assert [row["balance"] for row in same_day] == [120, 150, 100]
+    assert result["summary"]["balance"] == 120
+
+
 @pytest.mark.parametrize("has_contract", [True, False])
 async def test_bank_business_registration_updates_ledger_costs_and_receivables(fixture_db, has_contract):
     db, _, ids = fixture_db

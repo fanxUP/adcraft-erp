@@ -220,18 +220,29 @@ class BankLedgerService:
                 "_sort": (opening.entry_date, 0, "", str(opening.id)),
             })
 
-        def daily_balance_order(row):
-            if row["entry_type"] == "opening_balance":
+        def daily_display_order(row):
+            if self._money(row["expense_amount"]) > MONEY_ZERO:
                 flow_order = 0
-            elif self._money(row["expense_amount"]) > MONEY_ZERO:
-                flow_order = 1
             elif self._money(row["income_amount"]) > MONEY_ZERO:
+                flow_order = 1
+            elif row["entry_type"] == "opening_balance":
                 flow_order = 2
             else:
                 flow_order = 3
             return flow_order, row["_sort"][2], row["_sort"][3]
 
-        rows.sort(key=lambda row: (row["entry_date"], *daily_balance_order(row)))
+        # The table is displayed newest date first, with same-day income below
+        # expenses. Calculate balances in the reverse visual order so reading
+        # from the bottom upward follows the balance progression the user expects.
+        rows_by_date = {}
+        for row in rows:
+            rows_by_date.setdefault(row["entry_date"], []).append(row)
+        calculation_rows = []
+        for row_date in sorted(rows_by_date):
+            day_rows = sorted(rows_by_date[row_date], key=daily_display_order)
+            calculation_rows.extend(reversed(day_rows))
+        rows = calculation_rows
+
         balance = opening_amount
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
@@ -326,7 +337,7 @@ class BankLedgerService:
                     reverse=True,
                 )
                 for row_date in month_dates:
-                    day_rows = sorted(rows_by_date[row_date], key=daily_balance_order)
+                    day_rows = sorted(rows_by_date[row_date], key=daily_display_order)
                     display_rows.extend(day_rows)
         rows = display_rows
         for row in rows:
