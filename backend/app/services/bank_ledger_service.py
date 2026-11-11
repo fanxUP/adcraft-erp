@@ -225,6 +225,7 @@ class BankLedgerService:
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
         monthly_totals = {}
+        yearly_totals = {}
         transaction_count = 0
         for row in rows:
             if row["entry_type"] == "opening_balance":
@@ -241,12 +242,21 @@ class BankLedgerService:
                     "expense_amount": MONEY_ZERO,
                     "balance": None,
                 })
+                year_key = row["entry_date"][:4]
+                year_total = yearly_totals.setdefault(year_key, {
+                    "income_amount": MONEY_ZERO,
+                    "expense_amount": MONEY_ZERO,
+                    "balance": None,
+                })
                 month_total["income_amount"] += income
                 month_total["expense_amount"] += expense
+                year_total["income_amount"] += income
+                year_total["expense_amount"] += expense
                 if balance is not None:
                     balance += income - expense
                     row["balance"] = balance
                 month_total["balance"] = balance
+                year_total["balance"] = balance
             row["income_amount"] = self._amount_value(row["income_amount"])
             row["expense_amount"] = self._amount_value(row["expense_amount"])
             row["balance"] = self._amount_value(row["balance"]) if row["balance"] is not None else None
@@ -255,40 +265,64 @@ class BankLedgerService:
         rows_by_date = {}
         for row in rows:
             rows_by_date.setdefault(row["entry_date"], []).append(row)
-        for month_key in sorted({row_date[:7] for row_date in rows_by_date}, reverse=True):
-            month_total = monthly_totals.get(month_key)
-            if month_total is not None:
-                year, month = month_key.split("-")
+        for year_key in sorted({row_date[:4] for row_date in rows_by_date}, reverse=True):
+            year_total = yearly_totals.get(year_key)
+            if year_total is not None:
                 display_rows.append({
-                    "id": f"monthly-total:{month_key}",
-                    "entry_type": "monthly_total",
-                    "source_label": "本月合计",
-                    "month_label": f"{year}年{int(month)}月",
-                    "entry_date": f"{month_key}-01",
+                    "id": f"yearly-total:{year_key}",
+                    "entry_type": "yearly_total",
+                    "source_label": "本年合计",
+                    "year_label": f"{year_key}年",
+                    "entry_date": f"{year_key}-01-01",
                     "summary": "",
                     "remark": None,
                     "counterparty_account": None,
                     "counterparty_name": None,
                     "category": None,
-                    "income_amount": self._amount_value(month_total["income_amount"]),
-                    "expense_amount": self._amount_value(month_total["expense_amount"]),
-                    "balance": self._amount_value(month_total["balance"]) if month_total["balance"] is not None else None,
+                    "income_amount": self._amount_value(year_total["income_amount"]),
+                    "expense_amount": self._amount_value(year_total["expense_amount"]),
+                    "balance": self._amount_value(year_total["balance"]) if year_total["balance"] is not None else None,
                     "project_name": None,
                     "department": None,
                 })
-            month_dates = sorted(
-                (row_date for row_date in rows_by_date if row_date.startswith(month_key)),
+            month_keys = sorted(
+                {row_date[:7] for row_date in rows_by_date if row_date.startswith(year_key)},
                 reverse=True,
             )
-            for row_date in month_dates:
-                day_rows = rows_by_date[row_date]
-                opening_rows = [row for row in day_rows if row["entry_type"] == "opening_balance"]
-                transaction_rows = sorted(
-                    (row for row in day_rows if row["entry_type"] != "opening_balance"),
-                    key=lambda row: row["_sort"],
+            for month_key in month_keys:
+                month_total = monthly_totals.get(month_key)
+                if month_total is not None:
+                    year, month = month_key.split("-")
+                    display_rows.append({
+                        "id": f"monthly-total:{month_key}",
+                        "entry_type": "monthly_total",
+                        "source_label": "本月合计",
+                        "month_label": f"{year}年{int(month)}月",
+                        "entry_date": f"{month_key}-01",
+                        "summary": "",
+                        "remark": None,
+                        "counterparty_account": None,
+                        "counterparty_name": None,
+                        "category": None,
+                        "income_amount": self._amount_value(month_total["income_amount"]),
+                        "expense_amount": self._amount_value(month_total["expense_amount"]),
+                        "balance": self._amount_value(month_total["balance"]) if month_total["balance"] is not None else None,
+                        "project_name": None,
+                        "department": None,
+                    })
+                month_dates = sorted(
+                    (row_date for row_date in rows_by_date if row_date.startswith(month_key)),
                     reverse=True,
                 )
-                display_rows.extend(opening_rows + transaction_rows)
+                for row_date in month_dates:
+                    day_rows = rows_by_date[row_date]
+                    opening_rows = [row for row in day_rows if row["entry_type"] == "opening_balance"]
+                    transaction_rows = sorted(
+                        (row for row in day_rows if row["entry_type"] != "opening_balance"),
+                        key=lambda row: row["_sort"],
+                        reverse=True,
+                    )
+                    display_rows.extend(opening_rows + transaction_rows)
         rows = display_rows
         for row in rows:
             row.pop("_sort", None)

@@ -71,35 +71,35 @@
           <DataTableShell aria-label="账户流水">
             <el-table class="bank-ledger-table" :data="result?.items ?? []" row-key="id" stripe :row-class-name="ledgerRowClassName">
               <el-table-column label="日期" width="115">
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? row.month_label : row.entry_date }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? row.year_label : row.entry_type === 'monthly_total' ? row.month_label : row.entry_date }}</template>
               </el-table-column>
               <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? '本年合计' : row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
               </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.counterparty_name || '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.counterparty_name || '—' }}</template>
               </el-table-column>
               <el-table-column prop="category" label="分类" min-width="110" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.category || '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.category || '—' }}</template>
               </el-table-column>
               <el-table-column label="收入金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="支出金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' || row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) || row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="余额" min-width="125" align="right">
                 <template #default="{ row }">{{ money(row.balance, '—') }}</template>
               </el-table-column>
               <el-table-column label="项目" min-width="150" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.project_name || '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.project_name || '—' }}</template>
               </el-table-column>
               <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.department || '—' }}</template>
+                <template #default="{ row }">{{ isLedgerTotal(row) ? '' : row.department || '—' }}</template>
               </el-table-column>
               <el-table-column label="备注" min-width="135">
                 <template #default="{ row }">
-                  <el-tag v-if="row.entry_type !== 'monthly_total'" size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
+                  <el-tag v-if="!isLedgerTotal(row)" size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
                     {{ row.source_label }}
                   </el-tag>
                 </template>
@@ -111,7 +111,7 @@
                     <el-button text type="danger" :disabled="mutating" @click="deleteManualEntry(account, row)">删除</el-button>
                   </div>
                   <el-button v-else-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
-                  <span v-else-if="row.entry_type !== 'monthly_total'">—</span>
+                  <span v-else-if="!isLedgerTotal(row)">—</span>
                 </template>
               </el-table-column>
               <template #empty>
@@ -483,7 +483,12 @@ function ledgerSummary(row: BankLedgerRow) {
 }
 
 function ledgerRowClassName({ row }: { row: BankLedgerRow }) {
+  if (row.entry_type === 'yearly_total') return 'yearly-total-row'
   return row.entry_type === 'monthly_total' ? 'monthly-total-row' : ''
+}
+
+function isLedgerTotal(row: BankLedgerRow) {
+  return row.entry_type === 'monthly_total' || row.entry_type === 'yearly_total'
 }
 
 function isEntryDateDisabled(value: Date) {
@@ -857,6 +862,18 @@ onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
 }
 .bank-ledger-table :deep(.el-table__body tr.monthly-total-row:hover > td.el-table__cell) {
   background-color: #dff0e3 !important;
+}
+.bank-ledger-table :deep(.el-table__body tr.yearly-total-row > td.el-table__cell) {
+  background-color: #e3f2fd !important;
+  color: #0d47a1 !important;
+  font-weight: 700;
+}
+.bank-ledger-table :deep(.el-table__body tr.yearly-total-row .cell) {
+  color: #0d47a1 !important;
+  font-weight: 700;
+}
+.bank-ledger-table :deep(.el-table__body tr.yearly-total-row:hover > td.el-table__cell) {
+  background-color: #d6eaf8 !important;
 }
 .bank-ledger-hint, .bank-ledger-note {
   margin: 0;

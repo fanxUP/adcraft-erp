@@ -23,7 +23,7 @@ export const getCompanyAccounts = () => get<CompanyAccount[]>('/company-accounts
 export const getCompanyAccountOptions = () => get<CompanyAccount[]>('/company-accounts/options', { params: { include_inactive: true } })
 export interface BankLedgerRow {
   id: string
-  entry_type: 'opening_balance' | 'source_payment' | 'source_receipt' | 'manual' | 'monthly_total'
+  entry_type: 'opening_balance' | 'source_payment' | 'source_receipt' | 'manual' | 'monthly_total' | 'yearly_total'
   source_label: string
   source_kind?: string
   source_id?: string | null
@@ -31,6 +31,7 @@ export interface BankLedgerRow {
   document_type?: string | null
   entry_date: string
   month_label?: string
+  year_label?: string
   summary: string | null
   remark: string | null
   counterparty_account: string | null
