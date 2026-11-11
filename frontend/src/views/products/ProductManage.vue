@@ -290,7 +290,7 @@
         <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: var(--el-color-danger)">*</span>为必填）：</p>
         <el-table :data="templateColumns" border size="small" style="margin: 12px 0">
           <el-table-column prop="name" label="列名" width="120" />
-          <el-table-column prop="desc" label="说明" />
+          <el-table-column prop="desc" label="摘要" />
           <el-table-column label="必填" width="60">
             <template #default="{ row: r }"><span v-if="r.required" style="color: var(--el-color-danger)">*</span></template>
           </el-table-column>

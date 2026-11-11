@@ -150,7 +150,7 @@
         <el-form-item label="车辆异常">
           <el-switch v-model="returnForm.abnormal_flag" />
         </el-form-item>
-        <el-form-item v-if="returnForm.abnormal_flag" label="异常说明">
+        <el-form-item v-if="returnForm.abnormal_flag" label="异常摘要">
           <el-input v-model="returnForm.abnormal_description" type="textarea" :rows="2" placeholder="请描述车辆异常情况" />
         </el-form-item>
         <el-form-item label="收车备注">

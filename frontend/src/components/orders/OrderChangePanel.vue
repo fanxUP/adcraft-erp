@@ -19,7 +19,7 @@
         <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.is_voided ? 'info' : 'success'">{{ row.is_voided ? '已作废' : '有效' }}</el-tag></template></el-table-column>
         <el-table-column label="金额" width="140"><template #default="{ row }">¥{{ Number(row.amount).toFixed(2) }}</template></el-table-column>
         <el-table-column label="实际收付款日期" min-width="150"><template #default="{ row }">{{ row.paid_at?.slice(0, 10) || '未登记' }}</template></el-table-column>
-        <el-table-column prop="remark" label="说明" min-width="220" />
+        <el-table-column prop="remark" label="摘要" min-width="220" />
       </el-table>
     </el-card>
     <el-dialog v-model="dialog" title="登记收款、退款或预收分配" width="min(560px, 94vw)" :close-on-click-modal="false">

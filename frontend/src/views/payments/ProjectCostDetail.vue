@@ -147,7 +147,7 @@
       <el-table-column prop="amount" label="支出总额" width="140" align="right" sortable>
         <template #default="{ row }">¥ {{ Number(row.amount || 0).toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip>
+      <el-table-column prop="remark" label="摘要" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ row.remark || '-' }}</template>
       </el-table-column>
       <el-table-column label="凭证" width="80" align="center">
@@ -323,8 +323,8 @@
           <div class="cost-form-total">¥ {{ formTotalAmount.toFixed(2) }}</div>
           <div class="form-tip">支出总额 = 支付金额 + 欠款金额，此项自动计算。</div>
         </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="填写这笔支出的说明…" />
+        <el-form-item label="摘要">
+          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="填写这笔支出的摘要…" />
         </el-form-item>
         <el-form-item label="凭证">
           <div
@@ -415,7 +415,7 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、说明</b>
+        <b>日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、摘要</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>

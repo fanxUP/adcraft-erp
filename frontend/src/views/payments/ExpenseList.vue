@@ -101,8 +101,8 @@
               <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
             </el-select>
           </el-form-item>
-          <el-form-item label="说明">
-            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="补充支出说明（可选）" />
+          <el-form-item label="摘要">
+            <el-input v-model="form.description" type="textarea" :rows="2" placeholder="补充支出摘要（可选）" />
           </el-form-item>
           <el-form-item label="凭证">
             <div

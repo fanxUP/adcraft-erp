@@ -20,7 +20,7 @@
       </el-table-column>
       <el-table-column prop="effective_from" label="生效日期" width="120" />
       <el-table-column prop="effective_to" label="失效日期" width="120" />
-      <el-table-column prop="description" label="说明" min-width="180" />
+      <el-table-column prop="description" label="摘要" min-width="180" />
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="viewRules(row)">查看规则</el-button>
@@ -43,7 +43,7 @@
         <el-form-item label="失效日期">
           <el-input v-model="form.effective_to" placeholder="YYYY-MM-DD" />
         </el-form-item>
-        <el-form-item label="说明">
+        <el-form-item label="摘要">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
       </el-form>

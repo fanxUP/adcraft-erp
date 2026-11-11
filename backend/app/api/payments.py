@@ -674,7 +674,7 @@ async def download_project_cost_template(
             top=Side(style="thin"), bottom=Side(style="thin"),
         )
 
-        headers = ["分项", "日期", "供应商", "支付金额", "欠款金额", "分类", "付款方式", "支出总额", "说明"]
+        headers = ["分项", "日期", "供应商", "支付金额", "欠款金额", "分类", "付款方式", "支出总额", "摘要"]
         col_widths = [20, 18, 24, 14, 14, 18, 16, 14, 30]
 
         for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):

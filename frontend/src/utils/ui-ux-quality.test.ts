@@ -134,7 +134,7 @@ describe('P08 UI/UX quality guardrails', () => {
       'label="登记时未付"',
       'label="付款账户"',
       'label="登记时付款方式"',
-      'label="说明"',
+      'label="摘要"',
       'label="凭证"',
     ]
     const positions = fieldLabels.map(label => formSource.indexOf(label))
@@ -165,7 +165,7 @@ describe('P08 UI/UX quality guardrails', () => {
       'label="分类"',
       'label="付款方式"',
       'label="支出总额"',
-      'label="说明"',
+      'label="摘要"',
       'label="凭证"',
     ]
     const positions = fieldLabels.map(label => formSource.indexOf(label))

@@ -18,7 +18,7 @@
             <el-button :disabled="busy || !selectedRole" @click="selectedRole && openEdit(selectedRole)">编辑角色</el-button>
             <el-button v-if="selectedRole && !isBuiltinRole(selectedRole)" type="danger" plain :disabled="busy" @click="handleDelete(selectedRole)">删除角色</el-button>
           </div>
-          <div v-if="selectedRole" class="muted">{{ isBuiltinRole(selectedRole) ? '内置角色' : '自定义角色' }} · {{ selectedRole.description || '暂无角色说明' }}</div>
+          <div v-if="selectedRole" class="muted">{{ isBuiltinRole(selectedRole) ? '内置角色' : '自定义角色' }} · {{ selectedRole.description || '暂无角色摘要' }}</div>
         </template>
       </div>
       <DataTableShell class="role-table" :state="roleTableState" aria-label="角色列表">
@@ -29,7 +29,7 @@
               <span class="muted">{{ isBuiltinRole(row) ? '内置角色' : '自定义角色' }} · {{ row.permissions.length }} 项权限</span>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="description" label="摘要" min-width="120" show-overflow-tooltip />
           <el-table-column label="操作" width="110">
             <template #default="{ row }">
               <el-button text type="primary" size="small" :disabled="busy" @click.stop="openEdit(row)">编辑</el-button>
@@ -73,7 +73,7 @@
           </div>
 
           <div class="permission-filters section-gap">
-            <el-input v-model="keyword" aria-label="搜索权限" placeholder="搜索模块、权限名称或说明" clearable :disabled="busy" />
+            <el-input v-model="keyword" aria-label="搜索权限" placeholder="搜索模块、权限名称或摘要" clearable :disabled="busy" />
             <el-select v-model="permissionFilter" aria-label="权限筛选" :disabled="busy">
               <el-option label="全部权限" value="all" />
               <el-option label="仅已选" value="selected" />
@@ -116,9 +116,9 @@
       <el-form :model="form" label-width="80px" @submit.prevent="handleSave">
         <el-form-item label="角色名称" required>
           <el-input v-model="form.name" :disabled="saving || editingBuiltin" maxlength="64" placeholder="输入角色名称" />
-          <span v-if="editingBuiltin" class="muted">内置角色名称固定，可修改说明和权限。</span>
+          <span v-if="editingBuiltin" class="muted">内置角色名称固定，可修改摘要和权限。</span>
         </el-form-item>
-        <el-form-item label="说明"><el-input v-model="form.description" :disabled="saving" type="textarea" placeholder="说明这个角色负责的业务" /></el-form-item>
+        <el-form-item label="摘要"><el-input v-model="form.description" :disabled="saving" type="textarea" placeholder="填写该角色的职责摘要" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button :disabled="saving" @click="showDialog = false">取消</el-button>

@@ -32,7 +32,7 @@
     <div
       v-if="guidance.next_action?.semantics"
       class="action-contract"
-      aria-label="下一步操作说明"
+      aria-label="下一步操作摘要"
     >
       <div class="action-contract-heading">
         <span>下一步怎么做</span>

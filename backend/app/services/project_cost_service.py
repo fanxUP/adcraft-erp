@@ -666,7 +666,7 @@ class ProjectCostService:
         """Parse an old or current project-cost workbook.
 
         The current format is based on the financial fields shown by the UI:
-        日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、说明。
+        日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、摘要。
         ``amount`` remains the persisted total and ``debt_amount`` remains the
         amount entering the payable ledger.  The former template is accepted
         during the compatibility window so historical workbooks do not break.
@@ -783,7 +783,7 @@ class ProjectCostService:
                 "group_name": text_value(get_value(row_values, "分项")) or None,
                 "description": text_value(get_value(row_values, "描述")) or None,
                 "summary": text_value(get_value(row_values, "成本摘要")) or None,
-                "remark": text_value(get_value(row_values, "说明")) or text_value(get_value(row_values, "备注")) or None,
+                "remark": text_value(get_value(row_values, "摘要")) or text_value(get_value(row_values, "说明")) or text_value(get_value(row_values, "备注")) or None,
                 "legacy_fields": {
                     key: float(value) if isinstance(value, Decimal) else value
                     for key, value in legacy_fields.items()

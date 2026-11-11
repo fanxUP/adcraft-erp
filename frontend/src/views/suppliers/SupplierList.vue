@@ -146,7 +146,7 @@
           <div v-if="!canBankUpdate" class="form-tip">当前角色只能查看收款账户，不能修改。</div>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="1000" show-word-limit placeholder="合作说明、付款约定或其他备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="1000" show-word-limit placeholder="合作摘要、付款约定或其他备注" />
         </el-form-item>
       </el-form>
       <template #footer>

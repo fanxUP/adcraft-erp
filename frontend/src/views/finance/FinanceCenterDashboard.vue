@@ -147,7 +147,7 @@
             <el-table-column prop="evidence_reference" label="凭证参考" min-width="160" show-overflow-tooltip>
               <template #default="{ row }">{{ row.evidence_reference || '—' }}</template>
             </el-table-column>
-            <el-table-column prop="review_note" label="核对说明" min-width="160" show-overflow-tooltip>
+            <el-table-column prop="review_note" label="核对摘要" min-width="160" show-overflow-tooltip>
               <template #default="{ row }">{{ row.review_note || '—' }}</template>
             </el-table-column>
             <el-table-column label="操作" min-width="300" fixed="right">
@@ -205,7 +205,7 @@
           <el-form-item label="凭证参考" :required="overlapNeedsEvidence">
             <el-input v-model="overlapReviewForm.evidence_reference" maxlength="255" placeholder="流水号、凭证编号或档案位置" />
           </el-form-item>
-          <el-form-item label="核对说明">
+          <el-form-item label="核对摘要">
             <el-input v-model="overlapReviewForm.note" type="textarea" :rows="3" maxlength="2000" show-word-limit />
           </el-form-item>
         </el-form>

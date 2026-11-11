@@ -25,7 +25,7 @@
           <el-table-column label="处理方式" min-width="140">
             <template #default="{ row }">{{ effects[row.effect as keyof typeof effects] }}</template>
           </el-table-column>
-          <el-table-column label="影响说明" min-width="190">
+          <el-table-column label="影响摘要" min-width="190">
             <template #default="{ row }">
               <span>{{ row.detail || '—' }}</span>
               <details v-if="row.items?.length" class="impact-items">

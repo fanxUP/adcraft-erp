@@ -83,7 +83,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item v-if="form.need_cargo" label="货物说明">
+        <el-form-item v-if="form.need_cargo" label="货物摘要">
           <el-input v-model="form.cargo_description" type="textarea" :rows="2" placeholder="描述需要装载的货物" />
         </el-form-item>
         <el-form-item label="备注">
@@ -109,7 +109,7 @@
         <el-descriptions-item label="预计返回">{{ formatTime(detail.expected_return_time) }}</el-descriptions-item>
         <el-descriptions-item label="需要司机">{{ detail.need_driver ? '是' : '否' }}</el-descriptions-item>
         <el-descriptions-item label="需要装货">{{ detail.need_cargo ? '是' : '否' }}</el-descriptions-item>
-        <el-descriptions-item v-if="detail.need_cargo" label="货物说明" :span="2">{{ detail.cargo_description || '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="detail.need_cargo" label="货物摘要" :span="2">{{ detail.cargo_description || '-' }}</el-descriptions-item>
         <el-descriptions-item label="预计里程">{{ detail.estimated_distance_km ? detail.estimated_distance_km + ' km' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="关联客户">{{ detail.customer_name || '-' }}</el-descriptions-item>
         <el-descriptions-item v-if="detail.approver_name" label="审批人">{{ detail.approver_name }}</el-descriptions-item>

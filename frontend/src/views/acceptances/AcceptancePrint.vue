@@ -106,7 +106,7 @@
             </td>
           </tr>
         <tr>
-          <td colspan="11" style="height: 60px; vertical-align: top; padding-top: 14px;"><strong>备注说明：</strong>{{ form.remark || '' }}</td>
+          <td colspan="11" style="height: 60px; vertical-align: top; padding-top: 14px;"><strong>备注摘要：</strong>{{ form.remark || '' }}</td>
         </tr>
         </tbody>
       </table>

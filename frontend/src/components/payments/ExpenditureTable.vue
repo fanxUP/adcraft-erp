@@ -135,7 +135,7 @@
           <el-descriptions-item label="关联单据">{{ selected.doc_no || '—' }}</el-descriptions-item>
           <el-descriptions-item label="部门/科室">{{ selected.department || '—' }}</el-descriptions-item>
           <el-descriptions-item label="供应商 / 收款方">{{ selected.supplier_name || '未关联供应商' }}</el-descriptions-item>
-          <el-descriptions-item label="说明">{{ selected.description || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="摘要">{{ selected.description || '—' }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="业务日期">{{ selected.source_date?.slice(0, 10) || '未填写业务日期' }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="最后付款日期">{{ expenditureLastPaymentDateLabel(selected.last_payment_date, selected.paid_amount) }}</el-descriptions-item>
           <el-descriptions-item :label="view === 'ledger' ? '业务总额' : '本次付款金额'">{{ formatMoney(selected.amount) }}</el-descriptions-item>
@@ -151,7 +151,7 @@
           </template>
           <el-descriptions-item v-if="selected.evidence_reference" label="核对凭证参考">{{ selected.evidence_reference }}</el-descriptions-item>
           <el-descriptions-item v-if="selected.evidence_type" label="凭证类型">{{ evidenceTypeLabel(selected.evidence_type) }}</el-descriptions-item>
-          <el-descriptions-item v-if="selected.reconciliation_note" label="核对说明">{{ selected.reconciliation_note }}</el-descriptions-item>
+          <el-descriptions-item v-if="selected.reconciliation_note" label="核对摘要">{{ selected.reconciliation_note }}</el-descriptions-item>
           <el-descriptions-item label="记录状态">{{ recordStatus(selected) }}</el-descriptions-item>
         </el-descriptions>
         <p class="expenditure-note">可打开支出详情查看分类、金额和凭证；项目费用和外协费用可进入对应记录处理。</p>
@@ -211,7 +211,7 @@
           <el-form-item label="凭证参考" required>
             <el-input v-model="reconciliationForm.evidence_reference" maxlength="255" placeholder="流水号、凭证编号或档案位置" />
           </el-form-item>
-          <el-form-item label="核对说明">
+          <el-form-item label="核对摘要">
             <el-input v-model="reconciliationForm.note" type="textarea" :rows="3" maxlength="2000" show-word-limit />
           </el-form-item>
         </el-form>

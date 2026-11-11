@@ -327,7 +327,7 @@
           <el-table-column label="状态" width="105"><template #default="{ row }">{{ relationStatusLabel(row.status) }}</template></el-table-column>
           <el-table-column label="处理动作" min-width="190"><template #default="{ row }">{{ relationActionLabel(row.action) }}</template></el-table-column>
           <el-table-column label="风险" width="70"><template #default="{ row }"><el-tag :type="riskTagType(row.risk)" size="small">{{ riskLabel(row.risk) }}</el-tag></template></el-table-column>
-          <el-table-column label="说明" min-width="250"><template #default="{ row }">{{ row.note || '-' }}</template></el-table-column>
+          <el-table-column label="摘要" min-width="250"><template #default="{ row }">{{ row.note || '-' }}</template></el-table-column>
         </el-table>
         <el-empty v-else description="本次没有可识别的关联记录" :image-size="60" />
 

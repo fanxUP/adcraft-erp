@@ -29,7 +29,7 @@
       <el-table-column label="支腿" width="70"><template #default="{ row }"><el-tag :type="row.outriggers_ok ? 'success' : 'danger'" size="small">{{ row.outriggers_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
       <el-table-column label="作业平台" width="80"><template #default="{ row }"><el-tag :type="row.platform_ok ? 'success' : 'danger'" size="small">{{ row.platform_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
       <el-table-column label="安全带" width="70"><template #default="{ row }"><el-tag :type="row.safety_belt_ok ? 'success' : 'danger'" size="small">{{ row.safety_belt_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
-      <el-table-column prop="issue_description" label="异常说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="issue_description" label="异常摘要" min-width="180" show-overflow-tooltip />
       <el-table-column prop="checked_at" label="检查时间" width="160" />
       </el-table>
       <template #error><StatePanel state="error" action-label="重新加载" @action="loadChecks" /></template>
@@ -51,7 +51,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="异常说明"><el-input v-model="checkForm.issue_description" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="异常摘要"><el-input v-model="checkForm.issue_description" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="showAddDialog = false">取消</el-button><el-button @click="handleSaveCheck" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
