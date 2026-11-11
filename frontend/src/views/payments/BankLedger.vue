@@ -74,17 +74,7 @@
                 <template #default="{ row }">{{ row.entry_date }}</template>
               </el-table-column>
               <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.summary || '' }}</template>
-              </el-table-column>
-              <el-table-column label="备注" min-width="180" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="ledger-summary-cell">
-                    <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
-                      {{ row.source_label }}
-                    </el-tag>
-                    <span>{{ row.remark || '' }}</span>
-                  </div>
-                </template>
+                <template #default="{ row }">{{ ledgerSummary(row) }}</template>
               </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.counterparty_name || '—' }}</template>
@@ -106,6 +96,13 @@
               </el-table-column>
               <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.department || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="135">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
+                    {{ row.source_label }}
+                  </el-tag>
+                </template>
               </el-table-column>
               <el-table-column label="操作" width="105" fixed="right">
                 <template #default="{ row }">
@@ -463,6 +460,14 @@ function money(value: number | null | undefined, emptyLabel: string) {
   return value === null || value === undefined ? emptyLabel : formatMoney(value)
 }
 
+function ledgerSummary(row: BankLedgerRow) {
+  const summary = row.summary?.trim() || ''
+  const remark = row.remark?.trim() || ''
+  if (!summary) return remark
+  if (!remark || remark === summary) return summary
+  return `${summary}；${remark}`
+}
+
 function isEntryDateDisabled(value: Date) {
   const candidate = [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-')
   const openingDate = result.value?.opening_balance?.entry_date
@@ -751,8 +756,6 @@ onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
   font-weight: var(--ui-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
-.ledger-summary-cell { display: flex; align-items: center; gap: var(--ui-space-2); min-width: 0; }
-.ledger-summary-cell span { overflow: hidden; text-overflow: ellipsis; }
 .bank-ledger-note { margin-top: var(--ui-space-3); }
 .dialog-note { margin-bottom: var(--ui-space-4); }
 .entry-form :deep(.el-input-number) { width: 100%; }
