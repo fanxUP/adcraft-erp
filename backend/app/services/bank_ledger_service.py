@@ -220,7 +220,16 @@ class BankLedgerService:
                 "_sort": (opening.entry_date, 0, "", str(opening.id)),
             })
 
-        rows.sort(key=lambda row: row["_sort"])
+        def daily_balance_order(row):
+            if row["entry_type"] == "opening_balance":
+                flow_order = 0
+            elif self._money(row["income_amount"]) > MONEY_ZERO:
+                flow_order = 1
+            else:
+                flow_order = 2
+            return flow_order, row["_sort"][2], row["_sort"][3]
+
+        rows.sort(key=lambda row: (row["entry_date"], *daily_balance_order(row)))
         balance = opening_amount
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
@@ -315,14 +324,8 @@ class BankLedgerService:
                     reverse=True,
                 )
                 for row_date in month_dates:
-                    day_rows = rows_by_date[row_date]
-                    opening_rows = [row for row in day_rows if row["entry_type"] == "opening_balance"]
-                    transaction_rows = sorted(
-                        (row for row in day_rows if row["entry_type"] != "opening_balance"),
-                        key=lambda row: row["_sort"],
-                        reverse=True,
-                    )
-                    display_rows.extend(opening_rows + transaction_rows)
+                    day_rows = sorted(rows_by_date[row_date], key=daily_balance_order)
+                    display_rows.extend(day_rows)
         rows = display_rows
         for row in rows:
             row.pop("_sort", None)
