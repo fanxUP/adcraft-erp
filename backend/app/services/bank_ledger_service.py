@@ -221,19 +221,21 @@ class BankLedgerService:
             })
 
         def daily_display_order(row):
-            if self._money(row["expense_amount"]) > MONEY_ZERO:
+            if (row.get("category") or "").strip() == "手续费":
                 flow_order = 0
-            elif self._money(row["income_amount"]) > MONEY_ZERO:
+            elif self._money(row["expense_amount"]) > MONEY_ZERO:
                 flow_order = 1
-            elif row["entry_type"] == "opening_balance":
+            elif self._money(row["income_amount"]) > MONEY_ZERO:
                 flow_order = 2
-            else:
+            elif row["entry_type"] == "opening_balance":
                 flow_order = 3
+            else:
+                flow_order = 4
             return flow_order, row["_sort"][2], row["_sort"][3]
 
-        # The table is displayed newest date first, with same-day income below
-        # expenses. Calculate balances in the reverse visual order so reading
-        # from the bottom upward follows the balance progression the user expects.
+        # The table is displayed newest date first, with same-day fee rows first
+        # and income below expenses. Calculate in reverse visual order so reading
+        # from the bottom upward follows the displayed balance progression.
         rows_by_date = {}
         for row in rows:
             rows_by_date.setdefault(row["entry_date"], []).append(row)
