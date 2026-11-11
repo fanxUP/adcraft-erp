@@ -73,18 +73,18 @@
               <el-table-column label="日期" width="115">
                 <template #default="{ row }">{{ row.entry_date }}</template>
               </el-table-column>
-              <el-table-column label="摘要" min-width="190" show-overflow-tooltip>
+              <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.summary || '' }}</template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="ledger-summary-cell">
                     <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
                       {{ row.source_label }}
                     </el-tag>
-                    <span>{{ row.summary || '' }}</span>
+                    <span>{{ row.remark || '' }}</span>
                   </div>
                 </template>
-              </el-table-column>
-              <el-table-column label="对方账号" min-width="135" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.counterparty_account || '—' }}</template>
               </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.counterparty_name || '—' }}</template>
@@ -244,24 +244,24 @@
             <el-form-item label="对方户名">
               <el-autocomplete
                 v-model="entryForm.counterparty_name"
-                :fetch-suggestions="fetchSupplierSuggestions"
+                :fetch-suggestions="fetchCounterpartySuggestions"
                 :trigger-on-focus="false"
                 :debounce="250"
                 clearable
                 :maxlength="entryPurpose === 'project_cost' ? 200 : 255"
-                placeholder="搜索并选择供应商，或直接输入户名"
+                placeholder="搜索供应商或公司账户，也可手动输入户名"
                 style="width: 100%"
                 @input="handleCounterpartyNameInput"
-                @select="selectSupplier"
+                @select="selectCounterparty"
               >
                 <template #default="{ item }">
                   <div class="supplier-option">
                     <span>{{ item.name }}</span>
-                    <span>{{ item.vendor_no }}</span>
+                    <span>{{ item.sourceLabel }}</span>
                   </div>
                 </template>
               </el-autocomplete>
-              <div class="form-hint">选择供应商可建立关联；直接输入的户名按自定义文本保存。</div>
+              <div class="form-hint">选择供应商会建立供应商关联；选择公司账户或手动输入只保存户名。</div>
             </el-form-item>
           </el-col>
           <el-col v-if="entryPurpose === 'manual'" :xs="24" :sm="12">
@@ -346,9 +346,16 @@ import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
-const EXPENSE_CATEGORIES = ['手续费', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他支出']
-const INCOME_CATEGORIES = ['利息收入', '其他收入']
-const COST_CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
+const EXPENSE_CATEGORIES = ['张江', '过账', '高空作业车', '员工社保', '员工工资', '居间费', '手续费', '餐费/交通费', '车辆加油/维修', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他支出']
+const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入']
+const COST_CATEGORIES = ['人工/工时费', '员工工资', '员工社保', '材料费', '租赁费', '高空作业车', '运输/物流费', '车辆加油/维修', '安装杂费', '办公费', '居间费', '手续费', '餐费/交通费', '差旅费', '其他']
+type CounterpartySuggestion = {
+  id: string
+  name: string
+  value: string
+  source: 'supplier' | 'company_account'
+  sourceLabel: string
+}
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -389,6 +396,7 @@ const canCreateProjectCost = computed(() => auth.canAll(['company_account:select
 const canCreateReceipt = computed(() => auth.canAll(['company_account:select', 'payment:create']))
 const canSetOpeningBalance = computed(() => auth.can('company_account:opening_balance_set'))
 const accounts = shallowRef<CompanyAccount[]>([])
+const allCompanyAccounts = shallowRef<CompanyAccount[]>([])
 const accountsLoading = ref(true)
 const accountsError = ref(false)
 const activeAccountId = ref('')
@@ -421,7 +429,7 @@ const entryForm = reactive({
   department: '',
   order_id: '',
 })
-const selectedSupplierName = ref('')
+const selectedCounterpartyName = ref('')
 const ordersLoading = ref(false)
 const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
 let orderSearchSequence = 0
@@ -470,7 +478,9 @@ async function loadAccounts() {
   accountsLoading.value = true
   accountsError.value = false
   try {
-    accounts.value = (await getCompanyAccountOptions()).filter(account =>
+    const accountOptions = await getCompanyAccountOptions()
+    allCompanyAccounts.value = accountOptions
+    accounts.value = accountOptions.filter(account =>
       ['bank', 'wechat', 'alipay'].includes(account.account_type),
     )
     const firstAccount = accounts.value.find(account => account.is_active) ?? accounts.value[0]
@@ -560,7 +570,7 @@ function resetEntryForm() {
   entryForm.counterparty_account = ''
   entryForm.counterparty_name = ''
   entryForm.counterparty_supplier_id = ''
-  selectedSupplierName.value = ''
+  selectedCounterpartyName.value = ''
   resetEntryPurposeFields()
 }
 
@@ -576,25 +586,45 @@ function resetEntryPurposeFields() {
   entryFormRef.value?.clearValidate(['category', 'order_id'])
 }
 
-async function fetchSupplierSuggestions(query: string, callback: (items: Array<BankLedgerSupplierOption & { value: string }>) => void) {
+async function fetchCounterpartySuggestions(query: string, callback: (items: CounterpartySuggestion[]) => void) {
+  const keyword = query.trim()
+  let suppliers: BankLedgerSupplierOption[] = []
   try {
-    const suppliers = await getBankLedgerSupplierOptions(query.trim() || undefined)
-    callback(suppliers.map(supplier => ({ ...supplier, value: supplier.name })))
+    suppliers = await getBankLedgerSupplierOptions(keyword || undefined)
   } catch {
-    callback([])
+    // Keep company-account suggestions available if the supplier lookup fails.
   }
+  const supplierSuggestions: CounterpartySuggestion[] = suppliers.map(supplier => ({
+    id: supplier.id,
+    name: supplier.name,
+    value: supplier.name,
+    source: 'supplier',
+    sourceLabel: `供应商 · ${supplier.vendor_no}`,
+  }))
+  const accountSuggestions: CounterpartySuggestion[] = allCompanyAccounts.value
+    .filter(account => account.is_active
+      && account.id !== entryTarget.value?.id
+      && account.name.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()))
+    .map(account => ({
+      id: account.id,
+      name: account.name,
+      value: account.name,
+      source: 'company_account',
+      sourceLabel: `公司账户 · ${accountTypeLabels[account.account_type]}`,
+    }))
+  callback([...supplierSuggestions, ...accountSuggestions].slice(0, 50))
 }
 
-function selectSupplier(item: BankLedgerSupplierOption) {
+function selectCounterparty(item: CounterpartySuggestion) {
   entryForm.counterparty_name = item.name
-  entryForm.counterparty_supplier_id = item.id
-  selectedSupplierName.value = item.name
+  entryForm.counterparty_supplier_id = item.source === 'supplier' ? item.id : ''
+  selectedCounterpartyName.value = item.name
 }
 
 function handleCounterpartyNameInput(value: string) {
-  if (entryForm.counterparty_supplier_id && value !== selectedSupplierName.value) {
+  if (value !== selectedCounterpartyName.value) {
     entryForm.counterparty_supplier_id = ''
-    selectedSupplierName.value = ''
+    selectedCounterpartyName.value = ''
   }
 }
 

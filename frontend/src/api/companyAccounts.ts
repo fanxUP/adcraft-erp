@@ -31,6 +31,7 @@ export interface BankLedgerRow {
   document_type?: string | null
   entry_date: string
   summary: string | null
+  remark: string | null
   counterparty_account: string | null
   counterparty_name: string | null
   counterparty_supplier_id?: string | null
