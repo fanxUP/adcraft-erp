@@ -69,37 +69,37 @@
           </dl>
 
           <DataTableShell aria-label="账户流水">
-            <el-table :data="result?.items ?? []" row-key="id" stripe>
+            <el-table class="bank-ledger-table" :data="result?.items ?? []" row-key="id" stripe :row-class-name="ledgerRowClassName">
               <el-table-column label="日期" width="115">
-                <template #default="{ row }">{{ row.entry_date }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? row.month_label : row.entry_date }}</template>
               </el-table-column>
               <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">{{ ledgerSummary(row) }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
               </el-table-column>
               <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.counterparty_name || '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.counterparty_name || '—' }}</template>
               </el-table-column>
               <el-table-column prop="category" label="分类" min-width="110" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.category || '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.category || '—' }}</template>
               </el-table-column>
               <el-table-column label="收入金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="支出金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' || row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="余额" min-width="125" align="right">
                 <template #default="{ row }">{{ money(row.balance, '—') }}</template>
               </el-table-column>
               <el-table-column label="项目" min-width="150" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.project_name || '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.project_name || '—' }}</template>
               </el-table-column>
               <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.department || '—' }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'monthly_total' ? '' : row.department || '—' }}</template>
               </el-table-column>
               <el-table-column label="备注" min-width="135">
                 <template #default="{ row }">
-                  <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
+                  <el-tag v-if="row.entry_type !== 'monthly_total'" size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">
                     {{ row.source_label }}
                   </el-tag>
                 </template>
@@ -111,7 +111,7 @@
                     <el-button text type="danger" :disabled="mutating" @click="deleteManualEntry(account, row)">删除</el-button>
                   </div>
                   <el-button v-else-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
-                  <span v-else>—</span>
+                  <span v-else-if="row.entry_type !== 'monthly_total'">—</span>
                 </template>
               </el-table-column>
               <template #empty>
@@ -482,6 +482,10 @@ function ledgerSummary(row: BankLedgerRow) {
   return `${summary}；${remark}`
 }
 
+function ledgerRowClassName({ row }: { row: BankLedgerRow }) {
+  return row.entry_type === 'monthly_total' ? 'monthly-total-row' : ''
+}
+
 function isEntryDateDisabled(value: Date) {
   const candidate = [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-')
   const openingDate = result.value?.opening_balance?.entry_date
@@ -842,6 +846,18 @@ onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
 .bank-ledger-buttons { display: flex; flex: 0 0 auto; gap: var(--ui-space-2); }
 .ledger-row-actions { display: flex; align-items: center; gap: var(--ui-space-2); }
 .ledger-row-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.bank-ledger-table :deep(.el-table__body tr.monthly-total-row > td.el-table__cell) {
+  background-color: #e8f5e9 !important;
+  color: #b71c1c !important;
+  font-weight: 700;
+}
+.bank-ledger-table :deep(.el-table__body tr.monthly-total-row .cell) {
+  color: #b71c1c !important;
+  font-weight: 700;
+}
+.bank-ledger-table :deep(.el-table__body tr.monthly-total-row:hover > td.el-table__cell) {
+  background-color: #dff0e3 !important;
+}
 .bank-ledger-hint, .bank-ledger-note {
   margin: 0;
   color: var(--ui-text-secondary);

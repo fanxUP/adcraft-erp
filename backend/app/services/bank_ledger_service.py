@@ -224,31 +224,71 @@ class BankLedgerService:
         balance = opening_amount
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
+        monthly_totals = {}
+        transaction_count = 0
         for row in rows:
             if row["entry_type"] == "opening_balance":
                 row["balance"] = balance
             else:
+                transaction_count += 1
                 income = self._money(row["income_amount"])
                 expense = self._money(row["expense_amount"])
                 income_total += income
                 expense_total += expense
+                month_key = row["entry_date"][:7]
+                month_total = monthly_totals.setdefault(month_key, {
+                    "income_amount": MONEY_ZERO,
+                    "expense_amount": MONEY_ZERO,
+                    "balance": None,
+                })
+                month_total["income_amount"] += income
+                month_total["expense_amount"] += expense
                 if balance is not None:
                     balance += income - expense
                     row["balance"] = balance
+                month_total["balance"] = balance
             row["income_amount"] = self._amount_value(row["income_amount"])
             row["expense_amount"] = self._amount_value(row["expense_amount"])
             row["balance"] = self._amount_value(row["balance"]) if row["balance"] is not None else None
 
         display_rows = []
-        for row_date in sorted({row["entry_date"] for row in rows}, reverse=True):
-            day_rows = [row for row in rows if row["entry_date"] == row_date]
-            opening_rows = [row for row in day_rows if row["entry_type"] == "opening_balance"]
-            transaction_rows = sorted(
-                (row for row in day_rows if row["entry_type"] != "opening_balance"),
-                key=lambda row: row["_sort"],
+        rows_by_date = {}
+        for row in rows:
+            rows_by_date.setdefault(row["entry_date"], []).append(row)
+        for month_key in sorted({row_date[:7] for row_date in rows_by_date}, reverse=True):
+            month_total = monthly_totals.get(month_key)
+            if month_total is not None:
+                year, month = month_key.split("-")
+                display_rows.append({
+                    "id": f"monthly-total:{month_key}",
+                    "entry_type": "monthly_total",
+                    "source_label": "本月合计",
+                    "month_label": f"{year}年{int(month)}月",
+                    "entry_date": f"{month_key}-01",
+                    "summary": "",
+                    "remark": None,
+                    "counterparty_account": None,
+                    "counterparty_name": None,
+                    "category": None,
+                    "income_amount": self._amount_value(month_total["income_amount"]),
+                    "expense_amount": self._amount_value(month_total["expense_amount"]),
+                    "balance": self._amount_value(month_total["balance"]) if month_total["balance"] is not None else None,
+                    "project_name": None,
+                    "department": None,
+                })
+            month_dates = sorted(
+                (row_date for row_date in rows_by_date if row_date.startswith(month_key)),
                 reverse=True,
             )
-            display_rows.extend(opening_rows + transaction_rows)
+            for row_date in month_dates:
+                day_rows = rows_by_date[row_date]
+                opening_rows = [row for row in day_rows if row["entry_type"] == "opening_balance"]
+                transaction_rows = sorted(
+                    (row for row in day_rows if row["entry_type"] != "opening_balance"),
+                    key=lambda row: row["_sort"],
+                    reverse=True,
+                )
+                display_rows.extend(opening_rows + transaction_rows)
         rows = display_rows
         for row in rows:
             row.pop("_sort", None)
@@ -266,7 +306,7 @@ class BankLedgerService:
                 "income_amount": self._amount_value(income_total),
                 "expense_amount": self._amount_value(expense_total),
                 "balance": self._amount_value(balance) if balance is not None else None,
-                "transaction_count": max(total - (1 if opening else 0), 0),
+                "transaction_count": transaction_count,
             },
         }
 
