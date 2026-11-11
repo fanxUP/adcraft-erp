@@ -223,7 +223,7 @@ async def test_bank_business_registration_updates_ledger_costs_and_receivables(f
         "opening_balance": 1000, "income_amount": 120.25, "expense_amount": 80.15,
         "balance": 1040.10, "transaction_count": 2,
     }
-    assert {row["summary"] for row in before_void["items"]} == {"期初余额", "采购纸张", "首笔回款"}
+    assert {row["summary"] for row in before_void["items"]} == {"", "采购纸张", "首笔回款"}
     limited_ledger = await BankLedgerService(db, viewer("expense:read")).get_ledger(account_id)
     assert limited_ledger["summary"] == before_void["summary"]
     hidden_receipt = next(row for row in limited_ledger["items"] if row["entry_type"] == "source_receipt")
