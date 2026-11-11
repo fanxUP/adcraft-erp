@@ -80,13 +80,13 @@
                 <template #default="{ row }">{{ isLedgerSummaryRow(row) ? '' : row.category || '—' }}</template>
               </el-table-column>
               <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.entry_type === 'daily_balance' ? '当日余额' : row.entry_type === 'yearly_total' ? '本年合计' : row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
+                <template #default="{ row }">{{ row.entry_type === 'yearly_total' ? '本年合计' : row.entry_type === 'monthly_total' ? '本月合计' : ledgerSummary(row) }}</template>
               </el-table-column>
               <el-table-column label="收入金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.entry_type === 'daily_balance' ? '' : isLedgerSummaryRow(row) || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
+                <template #default="{ row }">{{ isLedgerSummaryRow(row) || row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="支出金额" min-width="115" align="right">
-                <template #default="{ row }">{{ row.entry_type === 'daily_balance' ? '' : isLedgerSummaryRow(row) || row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
+                <template #default="{ row }">{{ isLedgerSummaryRow(row) || row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
               </el-table-column>
               <el-table-column label="余额" min-width="125" align="right">
                 <template #default="{ row }">{{ money(row.balance, '—') }}</template>
@@ -483,13 +483,12 @@ function ledgerSummary(row: BankLedgerRow) {
 }
 
 function ledgerRowClassName({ row }: { row: BankLedgerRow }) {
-  if (row.entry_type === 'daily_balance') return 'daily-balance-row'
   if (row.entry_type === 'yearly_total') return 'yearly-total-row'
   return row.entry_type === 'monthly_total' ? 'monthly-total-row' : ''
 }
 
 function isLedgerSummaryRow(row: BankLedgerRow) {
-  return row.entry_type === 'daily_balance' || row.entry_type === 'monthly_total' || row.entry_type === 'yearly_total'
+  return row.entry_type === 'monthly_total' || row.entry_type === 'yearly_total'
 }
 
 function isEntryDateDisabled(value: Date) {
@@ -875,18 +874,6 @@ onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
 }
 .bank-ledger-table :deep(.el-table__body tr.yearly-total-row:hover > td.el-table__cell) {
   background-color: #d6eaf8 !important;
-}
-.bank-ledger-table :deep(.el-table__body tr.daily-balance-row > td.el-table__cell) {
-  background-color: #f3f6fa !important;
-  color: #334155 !important;
-  font-weight: 600;
-}
-.bank-ledger-table :deep(.el-table__body tr.daily-balance-row .cell) {
-  color: #334155 !important;
-  font-weight: 600;
-}
-.bank-ledger-table :deep(.el-table__body tr.daily-balance-row:hover > td.el-table__cell) {
-  background-color: #eaf0f6 !important;
 }
 .bank-ledger-hint, .bank-ledger-note {
   margin: 0;
