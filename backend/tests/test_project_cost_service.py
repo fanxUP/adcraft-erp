@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -318,9 +319,15 @@ async def test_create_cost_accepts_multiple_order_items_as_one_cost_scope():
     service = ProjectCostService(db)
     service.repo.create = AsyncMock()
 
-    with patch(
-        "app.services.project_cost_service.generate_project_cost_no",
-        new=AsyncMock(return_value="COST-MULTI-001"),
+    with (
+        patch(
+            "app.services.finance_category_service.FinanceCategoryService.get_or_create",
+            new=AsyncMock(return_value=SimpleNamespace(id=uuid4(), name="材料费")),
+        ),
+        patch(
+            "app.services.project_cost_service.generate_project_cost_no",
+            new=AsyncMock(return_value="COST-MULTI-001"),
+        ),
     ):
         await service.create_cost(
             {
