@@ -351,7 +351,7 @@ import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
-const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
+const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '高空作业车', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
 type CounterpartySuggestion = {
   id: string
   name: string
