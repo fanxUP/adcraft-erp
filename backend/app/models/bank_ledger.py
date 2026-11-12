@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 
@@ -52,6 +52,10 @@ class BankLedgerEntry(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("outsource_vendors.id", ondelete="SET NULL"), nullable=True
     )
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance_categories.id", ondelete="RESTRICT"), nullable=True,
+    )
+    category_record: Mapped["FinanceCategory | None"] = relationship(lazy="selectin")
     project_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     order_id: Mapped[uuid.UUID | None] = mapped_column(

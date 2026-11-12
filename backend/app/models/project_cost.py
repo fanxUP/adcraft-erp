@@ -24,6 +24,10 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="分项名（1级分组）")
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance_categories.id", ondelete="RESTRICT"), nullable=True,
+    )
+    category_record: Mapped["FinanceCategory | None"] = relationship(lazy="selectin")
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, comment="数量")
     specification: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="规格尺寸")

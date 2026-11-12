@@ -47,6 +47,7 @@ from app.schemas.common import success, success_paginated
 from app.services.company_account_service import require_account_selection
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
+from app.services.finance_category_service import FinanceCategoryService
 from app.services.business_document_service import OrderDataMutationLocked
 from app.services.payable_service import PayableService
 from app.services.task_service import AttachmentService
@@ -654,6 +655,7 @@ async def get_order_project_cost_item_summary(
 
 @cost_router.get("/template")
 async def download_project_cost_template(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     """Download an Excel template for importing project costs."""
@@ -692,8 +694,9 @@ async def download_project_cost_template(
             cell.border = thin_border
 
         ws.merge_cells("A4:I4")
+        category_names = [category.name for category in await FinanceCategoryService(db).list_categories()]
         note_cell = ws.cell(row=4, column=1,
-            value="说明：支出总额 = 支付金额 + 欠款金额；分类可选值 — 张江、过账、高空作业车、员工社保、员工工资、居间费、手续费、餐费/交通费、车辆加油/维修、房租、水电、材料采购、外协加工安装、运输/物流费、办公、制作标书、投标保证金、工资、税费、还款、其他支出、租赁费、安装杂费、差旅费、人工/工时费、材料费、办公费、其他；付款方式可选值 — 现金支付、微信支付、支付宝转账、转账支付、对公支付、其它支付；供应商必须先在供应商管理中建立。凭证请在成本记录保存后上传。")
+            value=f"说明：支出总额 = 支付金额 + 欠款金额；分类可选值 — {'、'.join(category_names)}；付款方式可选值 — 现金支付、微信支付、支付宝转账、转账支付、对公支付、其它支付；供应商必须先在供应商管理中建立。凭证请在成本记录保存后上传。")
         note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
 
         buf = BytesIO()

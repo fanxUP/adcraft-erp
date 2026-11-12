@@ -57,7 +57,7 @@
         style="width: 160px"
         @change="fetchData"
       >
-        <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
+        <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
       </el-select>
       <el-date-picker
         v-model="dateRange"
@@ -308,7 +308,7 @@
             default-first-option
             style="width: 100%"
           >
-            <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
+            <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
         <el-form-item label="付款账户" :required="form.payment_amount > 0">
@@ -473,6 +473,7 @@ import {
 } from '@/api/payments'
 import { getOrder } from '@/api/orders'
 import { getSuppliers } from '@/api/suppliers'
+import { getFinanceCategories } from '@/api/financeCategories'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -481,7 +482,6 @@ import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailRespons
 import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
 import { getProjectCostPaymentAmount, normalizeProjectCostAmounts } from '@/utils/projectCostAmount'
-import { EXPENSE_CATEGORIES } from '@/utils/financeCategories'
 import {
   PROJECT_COST_ATTACHMENT_ACCEPT,
   PROJECT_COST_ATTACHMENT_PREVIEW_ZOOM_RATE,
@@ -495,7 +495,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
-const CATEGORIES = EXPENSE_CATEGORIES
 const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)
@@ -516,6 +515,7 @@ const editingOriginalHasCostDate = ref(false)
 const order = ref<OrderDetailResponse | QuoteDetailResponse | null>(null)
 const costSummary = ref<ProjectCostItemSummaryResponse | null>(null)
 const suppliers = ref<SupplierResponse[]>([])
+const categories = ref<string[]>([])
 const selectedFile = ref<File | null>(null)
 const importResult = ref<ProjectCostImportResponse | null>(null)
 const dialogAttachments = ref<AttachmentResponse[]>([])
@@ -899,6 +899,14 @@ async function fetchData() {
   }
 }
 
+async function fetchFinanceCategories() {
+  try {
+    categories.value = (await getFinanceCategories()).map(category => category.name)
+  } catch {
+    categories.value = []
+  }
+}
+
 async function handleSave() {
   if (!canMutateOrderCost.value) {
     ElMessage.warning('当前订单状态已锁定成本变更')
@@ -1229,6 +1237,7 @@ onMounted(() => {
   void fetchOrder()
   void fetchData()
   void fetchCostSummary()
+  void fetchFinanceCategories()
   void fetchSuppliers()
   startAutoRefresh()
 })

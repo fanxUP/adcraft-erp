@@ -48,6 +48,7 @@ from app.api import (
     finance_center,
     company_accounts,
     framework_contracts,
+    finance_categories,
     inventory,
     leaves,
     notifications,
@@ -347,6 +348,7 @@ app.include_router(payments.stmt_router, prefix="/api/v1")
 app.include_router(payments.exp_router, prefix="/api/v1")
 app.include_router(payments.cost_router, prefix="/api/v1")
 app.include_router(finance_center.router, prefix="/api/v1")
+app.include_router(finance_categories.router, prefix="/api/v1")
 app.include_router(payables.router, prefix="/api/v1")
 app.include_router(suppliers.router, prefix="/api/v1")
 app.include_router(company_accounts.router, prefix="/api/v1")

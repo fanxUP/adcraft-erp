@@ -14,6 +14,7 @@ from app.models.business_document import BusinessDocument
 from app.models.outsource import OutsourcePayment, OutsourceTask, OutsourceVendor
 from app.models.payable import PayablePayment
 from app.models.finance_reconciliation import FinancePaymentDateReconciliation
+from app.models.finance_category import FinanceCategory
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
 from app.models.company_account import CompanyAccount
@@ -64,7 +65,7 @@ class ExpenditureService:
         return sources
 
     @staticmethod
-    def _columns(kind, source_type, source, source_no, doc, vendor, category,
+    def _columns(kind, source_type, source, source_no, doc, vendor, category, category_code,
                  description, remark, source_date, last_payment_date, amount, paid, remaining,
                  undated, registered_paid, status):
         return [
@@ -78,7 +79,8 @@ class ExpenditureService:
             func.coalesce(vendor.c.name, source.c.payee_name if kind == "expense" else
                           source.c.payee_company_name if kind in ("project_cost", "outsource_payment") else
                           cast(literal(None), String)).label("supplier_name"),
-            category.label("category"), description.label("description"), remark.label("remark"),
+            category.label("category"), category_code.label("category_code"),
+            description.label("description"), remark.label("remark"),
             source_date.label("source_date"), last_payment_date.label("last_payment_date"),
             amount.label("amount"),
             paid.label("paid_amount"), remaining.label("remaining_amount"),
@@ -156,6 +158,11 @@ class ExpenditureService:
             )
             join = join.outerjoin(doc, table.c[document_column] == doc.c.id if document_column else literal(False))
             join = join.outerjoin(vendor, table.c.supplier_id == vendor.c.id)
+            category_code = literal(None, type_=String)
+            if kind == "project_cost":
+                category_ref = FinanceCategory.__table__.alias("project_cost_finance_category")
+                join = join.outerjoin(category_ref, table.c.category_id == category_ref.c.id)
+                category_code = category_ref.c.code
             amount, payable = _money(table.c.amount), _money(table.c[debt])
             inferred = func.greatest(amount - payable, 0)
             legacy = literal(0)
@@ -192,7 +199,7 @@ class ExpenditureService:
                 remark = table.c.remark
             branches.append(select(*self._columns(
                 kind, kind, table, table.c[number], doc, vendor, table.c.category,
-                description, remark, table.c[date_column],
+                category_code, description, remark, table.c[date_column],
                 func.greatest(registered_paid_date, settled_legacy_date, latest.c.last_payment_date),
                 amount, paid,
                 func.greatest(payable - legacy - _money(ps.c.paid), 0), undated,
@@ -229,7 +236,8 @@ class ExpenditureService:
             inactive = or_(task.c.deleted_at.is_not(None), task.c.status == "cancelled")
             branches.append(select(*self._columns(
                 "outsource_task", "outsource", task, task.c.task_no, doc, vendor, task.c.task_type,
-                task.c.description, task.c.remark, func.coalesce(task.c.completed_at, task.c.created_at),
+                literal(None, type_=String), task.c.description, task.c.remark,
+                func.coalesce(task.c.completed_at, task.c.created_at),
                 task_latest.c.last_payment_date, _money(task.c.total_amount), paid,
                 case((inactive, 0), else_=func.greatest(_money(task.c.total_amount) - paid, 0)),
                 undated_legacy + _money(os.c.undated), literal(0),
@@ -252,7 +260,8 @@ class ExpenditureService:
             ).outerjoin(doc, literal(False)).outerjoin(vendor, op.c.vendor_id == vendor.c.id)
             branches.append(select(*self._columns(
                 "outsource_payment", "outsource", op, op.c.payment_no, doc, vendor,
-                literal("未关联任务付款"), literal(None, type_=String), op.c.remark, standalone_paid_at,
+                literal("未关联任务付款"), literal(None, type_=String),
+                literal(None, type_=String), op.c.remark, standalone_paid_at,
                 func.greatest(standalone_paid_at, standalone_latest.c.last_payment_date), op.c.amount, op.c.amount,
                 literal(0), case((standalone_paid_at.is_(None), op.c.amount), else_=0), literal(0), literal("standalone"),
             )).select_from(join).where(op.c.task_id.is_(None)))
@@ -521,7 +530,7 @@ class ExpenditureService:
         columns = (
             "row_key", "source_type", "source_kind", "source_id", "source_no",
             "document_id", "document_type", "project_name", "department",
-            "supplier_name", "category", "description", "remark",
+            "supplier_name", "category", "category_code", "description", "remark",
             "amount", "paid_at",
         )
         records = (await self.db.execute(
