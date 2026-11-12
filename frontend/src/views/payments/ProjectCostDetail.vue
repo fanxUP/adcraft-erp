@@ -481,6 +481,7 @@ import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailRespons
 import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
 import { getProjectCostPaymentAmount, normalizeProjectCostAmounts } from '@/utils/projectCostAmount'
+import { EXPENSE_CATEGORIES } from '@/utils/financeCategories'
 import {
   PROJECT_COST_ATTACHMENT_ACCEPT,
   PROJECT_COST_ATTACHMENT_PREVIEW_ZOOM_RATE,
@@ -494,7 +495,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
-const CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
+const CATEGORIES = EXPENSE_CATEGORIES
 const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)

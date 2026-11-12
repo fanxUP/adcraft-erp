@@ -348,11 +348,10 @@ import { newRequestId } from '@/utils/requestId'
 import { latestRequest } from '@/utils/expenditure'
 import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
+import { EXPENSE_CATEGORIES } from '@/utils/financeCategories'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
-const EXPENSE_CATEGORIES = ['张江', '过账', '高空作业车', '员工社保', '员工工资', '居间费', '手续费', '餐费/交通费', '车辆加油/维修', '房租', '水电', '材料采购', '外协加工', '运输', '办公', '制作标书', '投标保证金', '工资', '税费', '还款', '其他支出']
 const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
-const COST_CATEGORIES = ['人工/工时费', '员工工资', '员工社保', '材料费', '租赁费', '高空作业车', '运输/物流费', '车辆加油/维修', '安装杂费', '办公费', '居间费', '手续费', '餐费/交通费', '差旅费', '其他']
 type CounterpartySuggestion = {
   id: string
   name: string
@@ -445,7 +444,7 @@ const ordersLoading = ref(false)
 const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
 let orderSearchSequence = 0
 const categoryOptions = computed(() => {
-  if (entryPurpose.value === 'project_cost') return COST_CATEGORIES
+  if (entryPurpose.value === 'project_cost') return EXPENSE_CATEGORIES
   return entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
 })
 const entryPurposeHint = computed(() => ({
