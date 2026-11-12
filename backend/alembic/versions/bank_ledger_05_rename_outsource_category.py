@@ -43,15 +43,18 @@ def upgrade():
                 UPDATE finance_categories SET name = '{NEW_NAME}' WHERE id = target_id;
             END IF;
 
-            FOREACH alias_name IN ARRAY ARRAY['{OLD_NAME}', '{LEGACY_NAME}'] LOOP
+            FOREACH alias_name IN ARRAY ARRAY['{NEW_NAME}', '{OLD_NAME}', '{LEGACY_NAME}'] LOOP
                 SELECT category_id INTO alias_id
                 FROM finance_category_aliases WHERE alias = alias_name FOR UPDATE;
                 IF alias_id IS NOT NULL AND alias_id <> target_id THEN
-                    RAISE EXCEPTION 'Finance category alias already points elsewhere: %', alias_name;
+                    RAISE EXCEPTION 'Finance category alias already points elsewhere';
                 END IF;
-                IF alias_id IS NULL THEN
+                IF alias_id IS NULL AND alias_name <> '{NEW_NAME}' THEN
                     INSERT INTO finance_category_aliases (id, alias, category_id)
                     VALUES (gen_random_uuid(), alias_name, target_id);
+                ELSIF alias_name = '{NEW_NAME}' AND alias_id = target_id THEN
+                    DELETE FROM finance_category_aliases
+                    WHERE alias = alias_name AND category_id = target_id;
                 END IF;
             END LOOP;
         END $$;
