@@ -138,7 +138,7 @@
       </el-table-column>
       <el-table-column label="分类" width="120">
         <template #default="{ row }">
-          <el-tag size="small">{{ row.category || '-' }}</el-tag>
+          <span>{{ row.category || '-' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="付款方式" width="120">
