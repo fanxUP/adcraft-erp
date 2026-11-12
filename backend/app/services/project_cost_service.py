@@ -19,6 +19,7 @@ from app.services.company_account_service import CompanyAccountService
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
 from app.services.finance_reconciliation_service import FinanceReconciliationService
+from app.services.finance_category_service import FinanceCategoryService
 from app.services.supplier_service import SupplierService
 from app.services.business_document_service import assert_order_data_mutable
 
@@ -331,14 +332,21 @@ class ProjectCostService:
             supplier.name if supplier else None
         )
 
-        account_id = await CompanyAccountService(self.db).initial_account(data, Decimal(str(data["amount"])) - Decimal(str(debt_amount)))
+        category_record = await FinanceCategoryService(self.db).get_or_create(data.get("category"))
+        if category_record is None:
+            raise ValueError("成本分类不能为空")
+        account_id = await CompanyAccountService(self.db).initial_account(
+            data,
+            Decimal(str(data["amount"])) - Decimal(str(debt_amount)),
+        )
         cost = ProjectCost(
             request_id=data.get("request_id"),
             payment_account_id=account_id,
             cost_no=await generate_project_cost_no(self.db),
             document_id=document_id,
             customer_id=customer_id_val,
-            category=data["category"],
+            category=category_record.name,
+            category_id=category_record.id,
             amount=data["amount"],
             description=data.get("description"),
             summary=data.get("summary"),
@@ -423,6 +431,12 @@ class ProjectCostService:
 
         normalized = dict(data)
         allow_null_fields: set[str] = set()
+        if "category" in normalized:
+            category_record = await FinanceCategoryService(self.db).get_or_create(normalized["category"])
+            if category_record is None:
+                raise ValueError("成本分类不能为空")
+            normalized["category"] = category_record.name
+            normalized["category_id"] = category_record.id
         if "supplier_id" in normalized:
             supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
             normalized["supplier_id"] = supplier.id if supplier else None

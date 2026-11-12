@@ -5,6 +5,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, select, text
+from sqlalchemy.orm import selectinload
 
 from app.core.permissions import user_has_permission
 from app.models.bank_ledger import BankLedgerEntry
@@ -15,6 +16,7 @@ from app.models.outsource import OutsourceVendor
 from app.models.payment import Payment
 from app.models.project_cost import ProjectCost
 from app.services.expenditure_service import ExpenditureService
+from app.services.finance_category_service import FinanceCategoryService
 
 SUPPORTED_ACCOUNT_TYPES = {"bank", "wechat", "alipay"}
 MONEY_ZERO = Decimal("0.00")
@@ -109,7 +111,7 @@ class BankLedgerService:
         manual_query = select(BankLedgerEntry).where(
             BankLedgerEntry.account_id == account_id,
             BankLedgerEntry.entry_type == "manual",
-        )
+        ).options(selectinload(BankLedgerEntry.category_record))
         if opening_date:
             manual_query = manual_query.where(BankLedgerEntry.entry_date >= opening_date)
         manual_entries = (await self.db.execute(
@@ -165,6 +167,7 @@ class BankLedgerService:
                 "counterparty_account": None,
                 "counterparty_name": payment.get("supplier_name"),
                 "category": payment.get("category"),
+                "_category_code": payment.get("category_code"),
                 "income_amount": MONEY_ZERO,
                 "expense_amount": amount,
                 "balance": None,
@@ -186,6 +189,7 @@ class BankLedgerService:
                 "counterparty_name": entry.counterparty_name,
                 "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
                 "category": entry.category,
+                "_category_code": entry.category_record.code if entry.category_record else None,
                 "income_amount": amount if is_income else MONEY_ZERO,
                 "expense_amount": MONEY_ZERO if is_income else amount,
                 "balance": None,
@@ -221,7 +225,7 @@ class BankLedgerService:
             })
 
         def daily_display_order(row):
-            if (row.get("category") or "").strip() == "手续费":
+            if row.get("_category_code") == "bank_fee" or (row.get("category") or "").strip() == "手续费":
                 flow_order = 0
             elif self._money(row["expense_amount"]) > MONEY_ZERO:
                 flow_order = 1
@@ -344,6 +348,7 @@ class BankLedgerService:
         rows = display_rows
         for row in rows:
             row.pop("_sort", None)
+            row.pop("_category_code", None)
         total = len(rows)
         start = (page - 1) * page_size
         page_rows = rows[start:start + page_size]
@@ -433,6 +438,10 @@ class BankLedgerService:
         for key in ("counterparty_account", "counterparty_name", "category", "project_name", "department"):
             if values.get(key) == "":
                 values[key] = None
+        category_record = None
+        if values.get("direction") == "expense":
+            category_record = await FinanceCategoryService(self.db).get_or_create(values.get("category"))
+            values["category"] = category_record.name if category_record else None
         supplier_id = values.get("counterparty_supplier_id")
         if supplier_id:
             supplier = await self.db.scalar(select(OutsourceVendor).where(
@@ -467,6 +476,8 @@ class BankLedgerService:
             counterparty_name=values.get("counterparty_name"),
             counterparty_supplier_id=supplier_id,
             category=values.get("category"),
+            category_id=category_record.id if category_record else None,
+            category_record=category_record,
             project_name=values.get("project_name"),
             department=values.get("department"),
             order_id=order_id,
@@ -504,6 +515,10 @@ class BankLedgerService:
         ):
             if values.get(key) == "":
                 values[key] = None
+        category_record = None
+        if values.get("direction") == "expense":
+            category_record = await FinanceCategoryService(self.db).get_or_create(values.get("category"))
+            values["category"] = category_record.name if category_record else None
 
         entry_date = values["entry_date"]
         if entry_date > self._today():
@@ -552,6 +567,8 @@ class BankLedgerService:
         entry.counterparty_name = values.get("counterparty_name")
         entry.counterparty_supplier_id = supplier_id
         entry.category = values.get("category")
+        entry.category_id = category_record.id if category_record else None
+        entry.category_record = category_record
         entry.project_name = values.get("project_name")
         entry.department = values.get("department")
         entry.order_id = order_id

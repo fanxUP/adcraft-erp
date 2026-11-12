@@ -340,6 +340,7 @@ import {
   type CompanyAccount,
   type BankLedgerRow,
 } from '@/api/companyAccounts'
+import { getFinanceCategories, type FinanceCategoryOption } from '@/api/financeCategories'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { businessToday } from '@/utils/datetime'
@@ -348,7 +349,6 @@ import { newRequestId } from '@/utils/requestId'
 import { latestRequest } from '@/utils/expenditure'
 import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
-import { EXPENSE_CATEGORIES } from '@/utils/financeCategories'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
@@ -442,10 +442,13 @@ const entryForm = reactive({
 const selectedCounterpartyName = ref('')
 const ordersLoading = ref(false)
 const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
+const financeCategories = shallowRef<FinanceCategoryOption[]>([])
 let orderSearchSequence = 0
 const categoryOptions = computed(() => {
-  if (entryPurpose.value === 'project_cost') return EXPENSE_CATEGORIES
-  return entryForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  if (entryPurpose.value === 'project_cost') return financeCategories.value.map(category => category.name)
+  return entryForm.direction === 'income'
+    ? INCOME_CATEGORIES
+    : financeCategories.value.map(category => category.name)
 })
 const entryPurposeHint = computed(() => ({
   manual: '适用于手续费、利息等独立流水。已在系统登记的业务收付款请勿重复补录。',
@@ -516,6 +519,14 @@ async function loadAccounts() {
     accountsError.value = true
   } finally {
     accountsLoading.value = false
+  }
+}
+
+async function loadFinanceCategories() {
+  try {
+    financeCategories.value = await getFinanceCategories()
+  } catch {
+    financeCategories.value = []
   }
 }
 
@@ -826,7 +837,10 @@ async function submitEntry() {
 }
 
 watch([activeAccountId, page], loadLedger)
-onMounted(() => { if (canReadAccounts.value) void loadAccounts() })
+onMounted(() => {
+  void loadFinanceCategories()
+  if (canReadAccounts.value) void loadAccounts()
+})
 </script>
 
 <style scoped>
