@@ -18,7 +18,7 @@ from app.models.project_cost import ProjectCost
 from app.services.expenditure_service import ExpenditureService
 from app.services.finance_category_service import FinanceCategoryService
 
-SUPPORTED_ACCOUNT_TYPES = {"bank", "wechat", "alipay"}
+SUPPORTED_ACCOUNT_TYPES = {"bank", "wechat", "alipay", "cash", "other"}
 MONEY_ZERO = Decimal("0.00")
 
 
@@ -65,7 +65,7 @@ class BankLedgerService:
         if account is None:
             raise ValueError("公司账户不存在")
         if account.account_type not in SUPPORTED_ACCOUNT_TYPES:
-            raise ValueError("银行台账仅支持银行、微信和支付宝账户")
+            raise ValueError("银行台账账户类型无效")
         return account
 
     @staticmethod
@@ -611,7 +611,13 @@ class BankLedgerService:
 
     @staticmethod
     def _payment_method(account):
-        return {"bank": "转账支付", "wechat": "微信支付", "alipay": "支付宝转账"}[account.account_type]
+        return {
+            "bank": "转账支付",
+            "wechat": "微信支付",
+            "alipay": "支付宝转账",
+            "cash": "现金支付",
+            "other": "其它支付",
+        }[account.account_type]
 
     @classmethod
     def _same_business_movement(cls, record, account_id, movement_date, data):

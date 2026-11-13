@@ -1,7 +1,7 @@
 <template>
   <AppPage>
     <template #header>
-      <PageHeader title="银行台账" description="按银行、微信和支付宝账户查看收支流水与账面余额。" />
+      <PageHeader title="银行台账" description="按银行、微信、支付宝、现金和其他账户查看收支流水与账面余额。" />
     </template>
 
     <el-tabs v-model="activeSection" aria-label="银行台账分类" class="bank-ledger-sections">
@@ -21,7 +21,7 @@
       action-label="重试"
       @action="loadAccounts"
     />
-    <StatePanel v-else-if="!accounts.length" title="暂无可用账户" description="请先在公司账户中登记银行、微信或支付宝账户。">
+    <StatePanel v-else-if="!accounts.length" title="暂无可用账户" description="请先在公司账户中登记银行、微信、支付宝、现金或其他账户。">
       <template #actions>
         <router-link :to="{ name: 'CompanyAccountList' }">查看公司账户</router-link>
       </template>
@@ -511,7 +511,7 @@ async function loadAccounts() {
     const accountOptions = await getCompanyAccountOptions()
     allCompanyAccounts.value = accountOptions
     accounts.value = accountOptions.filter(account =>
-      ['bank', 'wechat', 'alipay'].includes(account.account_type),
+      ['bank', 'wechat', 'alipay', 'cash', 'other'].includes(account.account_type),
     )
     const firstAccount = accounts.value.find(account => account.is_active) ?? accounts.value[0]
     if (firstAccount) selectAccount(firstAccount.id)
