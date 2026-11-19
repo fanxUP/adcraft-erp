@@ -1,3 +1,5 @@
+from datetime import date
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -43,6 +45,18 @@ async def _audit(db, user, request, object_id, action, data):
     # Never write full bank details to operation logs.
     await log_operation(db, user.id, user.real_name or user.username, "company_account", object_id,
                         action, ip_address=request.client.host if request.client else None, after_data=data)
+
+
+def _bank_ledger_filters(keyword, start_date, end_date, direction, category, amount_min, amount_max):
+    return {
+        "keyword": keyword,
+        "start_date": start_date,
+        "end_date": end_date,
+        "direction": direction,
+        "category": category,
+        "amount_min": amount_min,
+        "amount_max": amount_max,
+    }
 
 
 @router.get("/options")
@@ -144,16 +158,54 @@ async def delete_account(account_id: UUID, request: Request, db: AsyncSession = 
     return success({"deleted": True})
 
 
-@router.get("/{account_id}/ledger")
-async def list_account_ledger(
-    account_id: UUID,
-    page: int = 1,
-    page_size: int = 20,
+@router.get("/ledger")
+async def search_account_ledgers(
+    account_id: UUID | None = None,
+    keyword: str | None = Query(default=None, max_length=120),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    direction: Literal["income", "expense"] | None = None,
+    category: str | None = Query(default=None, max_length=64),
+    amount_min: Decimal | None = Query(default=None, ge=Decimal("0")),
+    amount_max: Decimal | None = Query(default=None, ge=Decimal("0")),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_READ)),
 ):
     try:
-        result = await BankLedgerService(db, user).get_ledger(account_id, page, page_size)
+        result = await BankLedgerService(db, user).search_ledgers(
+            page, page_size,
+            filters=_bank_ledger_filters(keyword, start_date, end_date, direction, category, amount_min, amount_max),
+            account_id=account_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return success(result)
+
+
+@router.get("/{account_id}/ledger")
+async def list_account_ledger(
+    account_id: UUID,
+    keyword: str | None = Query(default=None, max_length=120),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    direction: Literal["income", "expense"] | None = None,
+    category: str | None = Query(default=None, max_length=64),
+    amount_min: Decimal | None = Query(default=None, ge=Decimal("0")),
+    amount_max: Decimal | None = Query(default=None, ge=Decimal("0")),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission(PERM_COMPANY_ACCOUNT_LEDGER_READ)),
+):
+    try:
+        result = await BankLedgerService(db, user).get_ledger(
+            account_id, page, page_size,
+            filters=_bank_ledger_filters(keyword, start_date, end_date, direction, category, amount_min, amount_max),
+        )
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     except ValueError as exc:

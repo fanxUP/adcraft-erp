@@ -517,18 +517,34 @@ class ExpenditureService:
 
     async def list_account_cash_payments(self, account_id, *, start_date=None):
         """Return confirmed cash payments assigned to an account for balance calculation."""
+        return await self._list_account_cash_payments(account_id=account_id, start_date=start_date)
+
+    async def list_account_cash_payments_for_accounts(self, account_ids):
+        """Return confirmed cash payments for several accounts in one query."""
+        account_ids = tuple(account_ids)
+        if not account_ids:
+            return []
+        return await self._list_account_cash_payments(account_ids=account_ids)
+
+    async def _list_account_cash_payments(self, *, account_id=None, account_ids=None, start_date=None):
+        """Shared cash-payment projection used by single- and multi-account ledgers."""
         if not self.available_sources:
             raise PermissionError("没有查看该支出来源的权限")
         table = self._with_payment_accounts(self._disbursements(self._ledger()))
         conditions = [
-            table.c.payment_account_id == account_id,
             table.c.date_status == "confirmed",
             table.c.paid_at.is_not(None),
         ]
+        if account_id is not None:
+            conditions.append(table.c.payment_account_id == account_id)
+        elif account_ids:
+            conditions.append(table.c.payment_account_id.in_(account_ids))
+        else:
+            raise ValueError("至少需要指定一个公司账户")
         if start_date:
             conditions.append(table.c.paid_at >= datetime.combine(start_date, datetime.min.time()))
         columns = (
-            "row_key", "source_type", "source_kind", "source_id", "source_no",
+            "payment_account_id", "row_key", "source_type", "source_kind", "source_id", "source_no",
             "document_id", "document_type", "project_name", "department",
             "supplier_name", "category", "category_code", "description", "remark",
             "amount", "paid_at",

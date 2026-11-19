@@ -27,7 +27,136 @@
       </template>
     </StatePanel>
 
-    <el-tabs v-else :model-value="activeAccountId" class="bank-account-tabs" aria-label="资金账户" @update:model-value="selectAccount">
+    <template v-else>
+    <el-form class="bank-ledger-search" @submit.prevent="applyLedgerSearch">
+      <div class="bank-ledger-search-scope">搜索范围：<strong>{{ searchScopeLabel }}</strong></div>
+      <div class="bank-ledger-search-row">
+        <el-form-item label="关键词">
+          <el-input
+            v-model="searchDraft.keyword"
+            maxlength="120"
+            clearable
+            :placeholder="isAllAccountsScope ? '账户、对方户名、摘要、备注、分类、项目或部门' : '对方户名、摘要、备注、分类、项目或部门'"
+            @keyup.enter="applyLedgerSearch"
+          />
+        </el-form-item>
+        <el-form-item label="日期范围">
+          <el-date-picker
+            v-model="searchDraft.date_range"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item v-if="isAllAccountsScope" label="账户">
+          <el-select v-model="searchDraft.account_id" clearable filterable placeholder="全部账户">
+            <el-option v-for="account in accounts" :key="account.id" :label="accountTabLabel(account) + (account.is_active ? '' : '（已停用）')" :value="account.id" />
+          </el-select>
+        </el-form-item>
+      </div>
+      <div class="bank-ledger-search-row bank-ledger-search-advanced">
+        <el-form-item label="收支方向">
+          <el-select v-model="searchDraft.direction" clearable placeholder="全部方向">
+            <el-option label="收入" value="income" />
+            <el-option label="支出" value="expense" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="searchDraft.category" clearable filterable placeholder="全部分类">
+            <el-option v-for="category in searchCategoryOptions" :key="category" :label="category" :value="category" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="金额范围">
+          <div class="bank-ledger-amount-range">
+            <el-input-number v-model="searchDraft.amount_min" :min="0" :precision="2" :step="100" controls-position="right" placeholder="最低金额" aria-label="最低金额" />
+            <span>至</span>
+            <el-input-number v-model="searchDraft.amount_max" :min="0" :precision="2" :step="100" controls-position="right" placeholder="最高金额" aria-label="最高金额" />
+          </div>
+        </el-form-item>
+        <div class="bank-ledger-search-buttons">
+          <el-button type="primary" native-type="submit" :loading="loading">搜索</el-button>
+          <el-button :disabled="loading" @click="clearLedgerSearch">清空</el-button>
+        </div>
+      </div>
+    </el-form>
+
+    <el-tabs :model-value="activeAccountId" class="bank-account-tabs" aria-label="资金账户" @update:model-value="selectAccount">
+      <el-tab-pane :name="ALL_ACCOUNTS_SCOPE" label="全部账户" lazy>
+        <template v-if="isAllAccountsScope">
+          <dl class="bank-ledger-summary bank-ledger-result-summary" aria-label="全部账户搜索结果统计" :aria-busy="loading">
+            <div><dt>匹配流水</dt><dd>{{ allResult?.summary.matching_count ?? '—' }} 条</dd></div>
+            <div><dt>匹配收入</dt><dd>{{ allResult ? formatMoney(allResult.summary.income_amount) : '—' }}</dd></div>
+            <div><dt>匹配支出</dt><dd>{{ allResult ? formatMoney(allResult.summary.expense_amount) : '—' }}</dd></div>
+            <div><dt>涉及账户</dt><dd>{{ allResult ? `${allResult.summary.account_count} 个` : '—' }}</dd></div>
+          </dl>
+          <p class="bank-ledger-note">每行余额属于该行账户；不同账户的余额分别计算，不合并为一个余额。</p>
+          <DataTableShell aria-label="全部账户流水搜索结果">
+            <el-table class="bank-ledger-table" :data="allResult?.items ?? []" row-key="id" stripe>
+              <el-table-column label="账户" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ row.account_label }}
+                  <el-tag v-if="!row.account_is_active" class="bank-account-status" type="info" size="small">已停用</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="entry_date" label="日期" width="115" />
+              <el-table-column label="对方户名" min-width="145" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.counterparty_name || '—' }}</template>
+              </el-table-column>
+              <el-table-column prop="category" label="分类" min-width="110" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.category || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="摘要" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ ledgerSummary(row) }}</template>
+              </el-table-column>
+              <el-table-column label="收入金额" min-width="115" align="right">
+                <template #default="{ row }">{{ row.income_amount ? formatMoney(row.income_amount) : '—' }}</template>
+              </el-table-column>
+              <el-table-column label="支出金额" min-width="115" align="right">
+                <template #default="{ row }">{{ row.expense_amount ? formatMoney(row.expense_amount) : '—' }}</template>
+              </el-table-column>
+              <el-table-column label="余额" min-width="125" align="right">
+                <template #default="{ row }">{{ money(row.balance, '—') }}</template>
+              </el-table-column>
+              <el-table-column label="项目" min-width="150" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.project_name || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="部门/科室" min-width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.department || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="110">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.entry_type === 'opening_balance' ? 'info' : row.entry_type === 'manual' ? 'warning' : 'success'">{{ row.source_label }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" fixed="right">
+                <template #default="{ row }">
+                  <el-button text type="primary" @click="showAccountLedger(row.account_id)">查看账户</el-button>
+                  <el-button v-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
+                </template>
+              </el-table-column>
+              <template #empty>
+                <StatePanel v-if="loading" state="loading" title="正在搜索账户流水" />
+                <StatePanel v-else-if="loadError" state="error" title="账户流水搜索失败" action-label="重试" @action="loadLedger" />
+                <StatePanel
+                  v-else-if="hasActiveSearch"
+                  title="没有找到匹配流水"
+                  description="尝试缩短关键词，或清除部分筛选条件。"
+                  action-label="清空筛选"
+                  @action="clearLedgerSearch"
+                />
+                <StatePanel v-else title="暂无账户流水" description="当前可查看账户还没有台账流水。" />
+              </template>
+            </el-table>
+            <template v-if="allResult && allResult.total > pageSize" #footer>
+              <el-pagination v-model:current-page="page" :page-size="pageSize" :total="allResult.total" :pager-count="5" layout="prev, pager, next" />
+            </template>
+          </DataTableShell>
+        </template>
+      </el-tab-pane>
+
       <el-tab-pane v-for="account in accounts" :key="account.id" :name="account.id" lazy>
         <template #label>
           <span class="bank-account-label" :title="accountTabLabel(account)">{{ accountTabLabel(account) }}</span>
@@ -66,6 +195,12 @@
             <div><dt>收入合计</dt><dd>{{ result ? formatMoney(result.summary.income_amount) : '—' }}</dd></div>
             <div><dt>支出合计</dt><dd>{{ result ? formatMoney(result.summary.expense_amount) : '—' }}</dd></div>
             <div><dt>账户余额</dt><dd>{{ result ? money(result.summary.balance, '未建账') : '—' }}</dd></div>
+          </dl>
+          <dl v-if="hasActiveSearch && result?.matched_summary" class="bank-ledger-summary bank-ledger-result-summary" aria-label="筛选结果统计">
+            <div><dt>匹配流水</dt><dd>{{ result.matched_summary.matching_count }} 条</dd></div>
+            <div><dt>匹配收入</dt><dd>{{ formatMoney(result.matched_summary.income_amount) }}</dd></div>
+            <div><dt>匹配支出</dt><dd>{{ formatMoney(result.matched_summary.expense_amount) }}</dd></div>
+            <div><dt>账户统计</dt><dd>仍为全部流水</dd></div>
           </dl>
 
           <DataTableShell aria-label="账户流水">
@@ -117,6 +252,13 @@
               <template #empty>
                 <StatePanel v-if="loading" state="loading" title="正在加载账户流水" />
                 <StatePanel v-else-if="loadError" state="error" title="账户流水加载失败" action-label="重试" @action="loadLedger" />
+                <StatePanel
+                  v-else-if="hasActiveSearch"
+                  title="没有找到匹配流水"
+                  description="尝试缩短关键词，或清除部分筛选条件。"
+                  action-label="清空筛选"
+                  @action="clearLedgerSearch"
+                />
                 <StatePanel v-else title="暂无账户流水" description="设置期初余额后，可登记或查看该账户的资金流水。" />
               </template>
             </el-table>
@@ -136,6 +278,7 @@
         </template>
       </el-tab-pane>
     </el-tabs>
+    </template>
     </template>
 
     <section v-else-if="canReadPayments" aria-label="待核对付款">
@@ -330,10 +473,13 @@ import {
   getBankLedgerOrderOptions,
   getBankLedgerSupplierOptions,
   getCompanyAccountOptions,
+  searchBankLedgers,
   setBankLedgerOpeningBalance,
   updateBankLedgerEntry,
   type BankLedgerEntryUpdate,
   type BankLedgerResult,
+  type BankLedgerSearchFilters,
+  type BankLedgerSearchResult,
   type BankLedgerOrderOption,
   type BankLedgerPurpose,
   type BankLedgerSupplierOption,
@@ -352,6 +498,7 @@ import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '高空作业车', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
+const ALL_ACCOUNTS_SCOPE = '__all_accounts__'
 type CounterpartySuggestion = {
   id: string
   name: string
@@ -411,6 +558,24 @@ const activeAccountId = ref('')
 const page = ref(1)
 const pageSize = 20
 const result = shallowRef<BankLedgerResult | null>(null)
+const allResult = shallowRef<BankLedgerSearchResult | null>(null)
+const searchDraft = reactive({
+  keyword: '',
+  date_range: null as string[] | null,
+  direction: '' as '' | 'income' | 'expense',
+  category: '',
+  amount_min: null as number | null,
+  amount_max: null as number | null,
+  account_id: '',
+})
+const appliedFilters = shallowRef<BankLedgerSearchFilters>({})
+const isAllAccountsScope = computed(() => activeAccountId.value === ALL_ACCOUNTS_SCOPE)
+const searchScopeLabel = computed(() => {
+  if (isAllAccountsScope.value) return '全部账户'
+  const account = accounts.value.find(item => item.id === activeAccountId.value)
+  return account ? accountTabLabel(account) : '选择账户'
+})
+const hasActiveSearch = computed(() => Object.values(appliedFilters.value).some(value => value !== undefined && value !== null && value !== ''))
 const loading = ref(false)
 const loadError = ref(false)
 const requests = latestRequest()
@@ -444,6 +609,12 @@ const ordersLoading = ref(false)
 const orderOptions = shallowRef<BankLedgerOrderOption[]>([])
 const financeCategories = shallowRef<FinanceCategoryOption[]>([])
 let orderSearchSequence = 0
+const searchCategoryOptions = computed(() => Array.from(new Set([
+  ...INCOME_CATEGORIES,
+  '客户收款',
+  '期初余额',
+  ...financeCategories.value.map(category => category.name),
+])))
 const categoryOptions = computed(() => {
   if (entryPurpose.value === 'project_cost') return financeCategories.value.map(category => category.name)
   return entryForm.direction === 'income'
@@ -500,8 +671,52 @@ function isEntryDateDisabled(value: Date) {
 }
 
 function selectAccount(id: string | number) {
+  const nextAccountId = String(id)
   page.value = 1
-  activeAccountId.value = String(id)
+  if (nextAccountId !== ALL_ACCOUNTS_SCOPE && appliedFilters.value.account_id) {
+    const nextFilters = { ...appliedFilters.value }
+    delete nextFilters.account_id
+    appliedFilters.value = nextFilters
+    searchDraft.account_id = ''
+  }
+  activeAccountId.value = nextAccountId
+}
+
+function showAccountLedger(accountId: string) {
+  selectAccount(accountId)
+}
+
+function buildLedgerSearchFilters(includeAccount: boolean): BankLedgerSearchFilters {
+  const [start_date, end_date] = searchDraft.date_range ?? []
+  const filters: BankLedgerSearchFilters = {
+    keyword: searchDraft.keyword.trim() || undefined,
+    start_date,
+    end_date,
+    direction: searchDraft.direction || undefined,
+    category: searchDraft.category || undefined,
+    amount_min: searchDraft.amount_min ?? undefined,
+    amount_max: searchDraft.amount_max ?? undefined,
+  }
+  if (includeAccount && searchDraft.account_id) filters.account_id = searchDraft.account_id
+  return filters
+}
+
+function applyLedgerSearch() {
+  if (searchDraft.amount_min !== null && searchDraft.amount_max !== null && searchDraft.amount_min > searchDraft.amount_max) {
+    ElMessage.warning('最低金额不能大于最高金额')
+    return
+  }
+  appliedFilters.value = buildLedgerSearchFilters(isAllAccountsScope.value)
+  page.value = 1
+}
+
+function clearLedgerSearch() {
+  Object.assign(searchDraft, {
+    keyword: '', date_range: null, direction: '', category: '',
+    amount_min: null, amount_max: null, account_id: '',
+  })
+  appliedFilters.value = {}
+  page.value = 1
 }
 
 async function loadAccounts() {
@@ -536,9 +751,18 @@ async function loadLedger() {
   loading.value = true
   loadError.value = false
   result.value = null
+  allResult.value = null
   try {
-    const data = await getBankLedger(activeAccountId.value, { page: page.value, page_size: pageSize })
-    if (requests.isCurrent(request)) result.value = data
+    const params = { page: page.value, page_size: pageSize }
+    if (isAllAccountsScope.value) {
+      const data = await searchBankLedgers({ ...params, ...appliedFilters.value })
+      if (requests.isCurrent(request)) allResult.value = data
+    } else {
+      const filters = { ...appliedFilters.value }
+      delete filters.account_id
+      const data = await getBankLedger(activeAccountId.value, { ...params, ...filters })
+      if (requests.isCurrent(request)) result.value = data
+    }
   } catch {
     if (requests.isCurrent(request)) loadError.value = true
   } finally {
@@ -836,7 +1060,7 @@ async function submitEntry() {
   }
 }
 
-watch([activeAccountId, page], loadLedger)
+watch([activeAccountId, page, appliedFilters], loadLedger)
 onMounted(() => {
   void loadFinanceCategories()
   if (canReadAccounts.value) void loadAccounts()
@@ -844,6 +1068,30 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.bank-ledger-search {
+  margin-bottom: var(--ui-space-4);
+  padding: var(--ui-space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+}
+.bank-ledger-search-scope { margin-bottom: var(--ui-space-3); color: var(--ui-text-secondary); }
+.bank-ledger-search-scope strong { color: var(--ui-text); }
+.bank-ledger-search-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: var(--ui-space-3);
+  align-items: end;
+}
+.bank-ledger-search-row :deep(.el-form-item) { min-width: 0; margin: 0; }
+.bank-ledger-search-row :deep(.el-form-item__content),
+.bank-ledger-search-row :deep(.el-select),
+.bank-ledger-search-row :deep(.el-date-editor) { width: 100%; min-width: 0; }
+.bank-ledger-search-advanced { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); margin-top: var(--ui-space-3); }
+.bank-ledger-amount-range { display: flex; align-items: center; gap: var(--ui-space-2); width: 100%; }
+.bank-ledger-amount-range :deep(.el-input-number) { flex: 1; min-width: 0; }
+.bank-ledger-search-buttons { display: flex; gap: var(--ui-space-2); }
+.bank-ledger-result-summary { margin-top: var(--ui-space-4); }
 .bank-account-tabs { min-width: 0; }
 .bank-account-tabs :deep(.el-tabs__item) { height: 44px; }
 .bank-account-label {
@@ -932,7 +1180,13 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+  .bank-ledger-search-row,
+  .bank-ledger-search-advanced { grid-template-columns: minmax(0, 1fr); }
+  .bank-ledger-search-buttons { width: 100%; }
+  .bank-ledger-search-buttons :deep(.el-button) { flex: 1; min-height: 44px; }
+  .bank-ledger-search :deep(.el-input__wrapper),
+  .bank-ledger-search :deep(.el-select__wrapper) { min-height: 44px; }
   .bank-ledger-actions { align-items: flex-start; flex-direction: column; }
   .bank-ledger-buttons { width: 100%; }
   .bank-ledger-buttons :deep(.el-button) { flex: 1; }

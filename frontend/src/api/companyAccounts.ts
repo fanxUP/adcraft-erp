@@ -69,6 +69,39 @@ export interface BankLedgerResult {
     balance: number | null
     transaction_count: number
   }
+  matched_summary?: {
+    matching_count: number
+    income_amount: number
+    expense_amount: number
+  }
+}
+export interface BankLedgerSearchFilters {
+  keyword?: string
+  start_date?: string
+  end_date?: string
+  direction?: 'income' | 'expense'
+  category?: string
+  amount_min?: number
+  amount_max?: number
+  account_id?: string
+}
+export interface BankLedgerSearchRow extends BankLedgerRow {
+  account_id: string
+  account_name: string
+  account_label: string
+  account_is_active: boolean
+}
+export interface BankLedgerSearchResult {
+  items: BankLedgerSearchRow[]
+  total: number
+  page: number
+  page_size: number
+  summary: {
+    matching_count: number
+    income_amount: number
+    expense_amount: number
+    account_count: number
+  }
 }
 export interface BankLedgerEntryCreate {
   request_id: string
@@ -91,8 +124,10 @@ export const getBankLedgerSupplierOptions = (keyword?: string) =>
   get<BankLedgerSupplierOption[]>('/company-accounts/ledger-options/suppliers', { params: keyword ? { keyword } : undefined })
 export const getBankLedgerOrderOptions = (keyword: string, purpose: BankLedgerPurpose) =>
   get<BankLedgerOrderOption[]>('/company-accounts/ledger-options/orders', { params: { keyword, purpose } })
-export const getBankLedger = (accountId: string, params?: { page?: number; page_size?: number }) =>
+export const getBankLedger = (accountId: string, params?: BankLedgerSearchFilters & { page?: number; page_size?: number }) =>
   get<BankLedgerResult>('/company-accounts/' + accountId + '/ledger', { params })
+export const searchBankLedgers = (params?: BankLedgerSearchFilters & { page?: number; page_size?: number }) =>
+  get<BankLedgerSearchResult>('/company-accounts/ledger', { params })
 export const setBankLedgerOpeningBalance = (
   accountId: string,
   data: { entry_date: string; amount: number },

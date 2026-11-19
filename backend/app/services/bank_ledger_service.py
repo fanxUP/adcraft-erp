@@ -77,178 +77,65 @@ class BankLedgerService:
             "amount": BankLedgerService._amount_value(entry.amount),
         }
 
-    async def get_ledger(self, account_id: UUID, page=1, page_size=20):
-        if page < 1 or not 1 <= page_size <= 200:
-            raise ValueError("列表参数无效")
-        await self._account(account_id)
-        opening = await self.db.scalar(select(BankLedgerEntry).where(
-            BankLedgerEntry.account_id == account_id,
-            BankLedgerEntry.entry_type == "opening_balance",
-        ))
-        opening_date = opening.entry_date if opening else None
+    @staticmethod
+    def _filters_active(filters):
+        return any(value not in (None, "") for value in (filters or {}).values())
 
-        cash_payments = await ExpenditureService(self.db, self.viewer).list_account_cash_payments(
-            account_id, start_date=opening_date,
-        )
-        receipts_query = (
-            select(
-                Payment.id, Payment.payment_no, Payment.document_id, Payment.paid_at,
-                Payment.amount, Payment.remark, Customer.name.label("customer_name"),
-                BusinessDocument.project_name, BusinessDocument.department,
-            )
-            .join(Customer, Customer.id == Payment.customer_id)
-            .outerjoin(BusinessDocument, BusinessDocument.id == Payment.document_id)
-            .where(
-                Payment.payment_account_id == account_id,
-                Payment.record_type == "receipt",
-                Payment.is_voided.is_(False),
-                Payment.paid_at.is_not(None),
-            )
-        )
-        if opening_date:
-            receipts_query = receipts_query.where(Payment.paid_at >= datetime.combine(opening_date, datetime.min.time()))
-        receipts = (await self.db.execute(receipts_query)).mappings().all()
-        manual_query = select(BankLedgerEntry).where(
-            BankLedgerEntry.account_id == account_id,
-            BankLedgerEntry.entry_type == "manual",
-        ).options(selectinload(BankLedgerEntry.category_record))
-        if opening_date:
-            manual_query = manual_query.where(BankLedgerEntry.entry_date >= opening_date)
-        manual_entries = (await self.db.execute(
-            manual_query.order_by(BankLedgerEntry.entry_date.asc(), BankLedgerEntry.created_at.asc())
-        )).scalars().all()
+    @staticmethod
+    def _normalize_filters(filters):
+        normalized = dict(filters or {})
+        for key in ("keyword", "category"):
+            if normalized.get(key) is not None:
+                normalized[key] = normalized[key].strip() or None
+        start_date, end_date = normalized.get("start_date"), normalized.get("end_date")
+        if start_date and end_date and start_date > end_date:
+            raise ValueError("开始日期不能晚于结束日期")
+        amount_min, amount_max = normalized.get("amount_min"), normalized.get("amount_max")
+        if amount_min is not None and amount_max is not None and amount_min > amount_max:
+            raise ValueError("最低金额不能大于最高金额")
+        if normalized.get("direction") not in (None, "income", "expense"):
+            raise ValueError("收支方向无效")
+        return {key: value for key, value in normalized.items() if value not in (None, "")}
 
-        rows = []
-        can_read_receipts = user_has_permission(self.viewer, "payment:read")
-        for receipt in receipts:
-            row_date = receipt["paid_at"].date()
-            document_id = receipt["document_id"] if can_read_receipts else None
-            rows.append({
-                "id": "receipt:" + str(receipt["id"]),
-                "entry_type": "source_receipt",
-                "source_label": "客户收款",
-                "source_kind": "receipt",
-                "source_id": str(receipt["id"]) if can_read_receipts else None,
-                "document_id": str(document_id) if document_id else None,
-                "document_type": "order" if document_id else None,
-                "entry_date": row_date.isoformat(),
-                "summary": (receipt["remark"] or "") if can_read_receipts else "",
-                "remark": None,
-                "counterparty_account": None,
-                "counterparty_name": receipt["customer_name"] if can_read_receipts else None,
-                "category": "客户收款",
-                "income_amount": self._money(receipt["amount"]),
-                "expense_amount": MONEY_ZERO,
-                "balance": None,
-                "project_name": receipt["project_name"] if can_read_receipts else None,
-                "department": receipt["department"] if can_read_receipts else None,
-                "_sort": (row_date, 1, receipt["paid_at"].isoformat(), str(receipt["id"])),
-            })
-        for payment in cash_payments:
-            paid_at = payment["paid_at"]
-            row_date = paid_at.date()
-            amount = self._money(payment["amount"])
-            rows.append({
-                "id": str(payment["row_key"]),
-                "entry_type": "source_payment",
-                "source_label": {
-                    "expense": "费用付款",
-                    "project_cost": "项目成本付款",
-                    "outsource_task": "外协付款",
-                    "outsource_payment": "外协付款",
-                }.get(payment["source_kind"], "ERP付款"),
-                "source_kind": payment["source_kind"],
-                "source_id": str(payment["source_id"]),
-                "document_id": str(payment["document_id"]) if payment["document_id"] else None,
-                "document_type": payment["document_type"],
-                "entry_date": row_date.isoformat(),
-                "summary": payment.get("description") or "",
-                "remark": payment.get("remark"),
-                "counterparty_account": None,
-                "counterparty_name": payment.get("supplier_name"),
-                "category": payment.get("category"),
-                "_category_code": payment.get("category_code"),
-                "income_amount": MONEY_ZERO,
-                "expense_amount": amount,
-                "balance": None,
-                "project_name": payment.get("project_name"),
-                "department": payment.get("department"),
-                "_sort": (row_date, 1, paid_at.isoformat(), str(payment["row_key"])),
-            })
-        for entry in manual_entries:
-            amount = self._money(entry.amount)
-            is_income = entry.direction == "income"
-            rows.append({
-                "id": str(entry.id),
-                "entry_type": "manual",
-                "source_label": "手工登记",
-                "entry_date": entry.entry_date.isoformat(),
-                "summary": entry.summary,
-                "remark": None,
-                "counterparty_account": entry.counterparty_account,
-                "counterparty_name": entry.counterparty_name,
-                "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
-                "category": entry.category,
-                "_category_code": entry.category_record.code if entry.category_record else None,
-                "income_amount": amount if is_income else MONEY_ZERO,
-                "expense_amount": MONEY_ZERO if is_income else amount,
-                "balance": None,
-                "project_name": entry.project_name,
-                "department": entry.department,
-                "order_id": str(entry.order_id) if entry.order_id else None,
-                "_sort": (
-                    entry.entry_date,
-                    2,
-                    entry.created_at.isoformat() if entry.created_at else "",
-                    str(entry.id),
-                ),
-            })
+    @staticmethod
+    def _daily_display_order(row):
+        if row.get("_category_code") == "bank_fee" or (row.get("category") or "").strip() == "手续费":
+            flow_order = 0
+        elif BankLedgerService._money(row["expense_amount"]) > MONEY_ZERO:
+            flow_order = 1
+        elif BankLedgerService._money(row["income_amount"]) > MONEY_ZERO:
+            flow_order = 2
+        elif row["entry_type"] == "opening_balance":
+            flow_order = 3
+        else:
+            flow_order = 4
+        return flow_order, row["_sort"][2], row["_sort"][3]
 
-        opening_amount = self._money(opening.amount) if opening else None
-        if opening:
-            rows.append({
-                "id": "opening:" + str(opening.id),
-                "entry_type": "opening_balance",
-                "source_label": "期初",
-                "entry_date": opening.entry_date.isoformat(),
-                "summary": "",
-                "remark": None,
-                "counterparty_account": None,
-                "counterparty_name": None,
-                "category": "期初余额",
-                "income_amount": MONEY_ZERO,
-                "expense_amount": MONEY_ZERO,
-                "balance": opening_amount,
-                "project_name": None,
-                "department": None,
-                "_sort": (opening.entry_date, 0, "", str(opening.id)),
-            })
-
-        def daily_display_order(row):
-            if row.get("_category_code") == "bank_fee" or (row.get("category") or "").strip() == "手续费":
-                flow_order = 0
-            elif self._money(row["expense_amount"]) > MONEY_ZERO:
-                flow_order = 1
-            elif self._money(row["income_amount"]) > MONEY_ZERO:
-                flow_order = 2
-            elif row["entry_type"] == "opening_balance":
-                flow_order = 3
-            else:
-                flow_order = 4
-            return flow_order, row["_sort"][2], row["_sort"][3]
-
-        # The table is displayed newest date first, with same-day fee rows first
-        # and income below expenses. Calculate in reverse visual order so reading
-        # from the bottom upward follows the displayed balance progression.
+    @classmethod
+    def _calculation_order(cls, rows):
         rows_by_date = {}
         for row in rows:
             rows_by_date.setdefault(row["entry_date"], []).append(row)
-        calculation_rows = []
+        ordered = []
         for row_date in sorted(rows_by_date):
-            day_rows = sorted(rows_by_date[row_date], key=daily_display_order)
-            calculation_rows.extend(reversed(day_rows))
-        rows = calculation_rows
+            day_rows = sorted(rows_by_date[row_date], key=cls._daily_display_order)
+            ordered.extend(reversed(day_rows))
+        return ordered
 
+    @classmethod
+    def _detail_display_order(cls, rows):
+        rows_by_date = {}
+        for row in rows:
+            rows_by_date.setdefault(row["entry_date"], []).append(row)
+        ordered = []
+        for row_date in sorted(rows_by_date, reverse=True):
+            ordered.extend(sorted(rows_by_date[row_date], key=cls._daily_display_order))
+        return ordered
+
+    @classmethod
+    def _calculate_account_rows(cls, rows, opening):
+        opening_amount = cls._money(opening.amount) if opening else None
+        rows = cls._calculation_order(rows)
         balance = opening_amount
         income_total = MONEY_ZERO
         expense_total = MONEY_ZERO
@@ -260,21 +147,17 @@ class BankLedgerService:
                 row["balance"] = balance
             else:
                 transaction_count += 1
-                income = self._money(row["income_amount"])
-                expense = self._money(row["expense_amount"])
+                income = cls._money(row["income_amount"])
+                expense = cls._money(row["expense_amount"])
                 income_total += income
                 expense_total += expense
                 month_key = row["entry_date"][:7]
                 month_total = monthly_totals.setdefault(month_key, {
-                    "income_amount": MONEY_ZERO,
-                    "expense_amount": MONEY_ZERO,
-                    "balance": None,
+                    "income_amount": MONEY_ZERO, "expense_amount": MONEY_ZERO, "balance": None,
                 })
                 year_key = row["entry_date"][:4]
                 year_total = yearly_totals.setdefault(year_key, {
-                    "income_amount": MONEY_ZERO,
-                    "expense_amount": MONEY_ZERO,
-                    "balance": None,
+                    "income_amount": MONEY_ZERO, "expense_amount": MONEY_ZERO, "balance": None,
                 })
                 month_total["income_amount"] += income
                 month_total["expense_amount"] += expense
@@ -285,85 +168,347 @@ class BankLedgerService:
                     row["balance"] = balance
                 month_total["balance"] = balance
                 year_total["balance"] = balance
-            row["income_amount"] = self._amount_value(row["income_amount"])
-            row["expense_amount"] = self._amount_value(row["expense_amount"])
-            row["balance"] = self._amount_value(row["balance"]) if row["balance"] is not None else None
+            row["income_amount"] = cls._amount_value(row["income_amount"])
+            row["expense_amount"] = cls._amount_value(row["expense_amount"])
+            row["balance"] = cls._amount_value(row["balance"]) if row["balance"] is not None else None
+        return rows, {
+            "opening_amount": opening_amount,
+            "income_amount": income_total,
+            "expense_amount": expense_total,
+            "balance": balance,
+            "transaction_count": transaction_count,
+            "monthly_totals": monthly_totals,
+            "yearly_totals": yearly_totals,
+        }
 
-        display_rows = []
+    @classmethod
+    def _period_display_rows(cls, rows, totals):
         rows_by_date = {}
         for row in rows:
             rows_by_date.setdefault(row["entry_date"], []).append(row)
+        display_rows = []
         for year_key in sorted({row_date[:4] for row_date in rows_by_date}, reverse=True):
-            year_total = yearly_totals.get(year_key)
+            year_total = totals["yearly_totals"].get(year_key)
             if year_total is not None:
                 display_rows.append({
-                    "id": f"yearly-total:{year_key}",
-                    "entry_type": "yearly_total",
-                    "source_label": "本年合计",
-                    "year_label": f"{year_key}年",
-                    "entry_date": f"{year_key}-01-01",
-                    "summary": "",
-                    "remark": None,
-                    "counterparty_account": None,
-                    "counterparty_name": None,
-                    "category": None,
-                    "income_amount": self._amount_value(year_total["income_amount"]),
-                    "expense_amount": self._amount_value(year_total["expense_amount"]),
-                    "balance": self._amount_value(year_total["balance"]) if year_total["balance"] is not None else None,
-                    "project_name": None,
-                    "department": None,
+                    "id": f"yearly-total:{year_key}", "entry_type": "yearly_total",
+                    "source_label": "本年合计", "year_label": f"{year_key}年",
+                    "entry_date": f"{year_key}-01-01", "summary": "", "remark": None,
+                    "counterparty_account": None, "counterparty_name": None, "category": None,
+                    "income_amount": cls._amount_value(year_total["income_amount"]),
+                    "expense_amount": cls._amount_value(year_total["expense_amount"]),
+                    "balance": cls._amount_value(year_total["balance"]) if year_total["balance"] is not None else None,
+                    "project_name": None, "department": None,
                 })
             month_keys = sorted(
-                {row_date[:7] for row_date in rows_by_date if row_date.startswith(year_key)},
-                reverse=True,
+                {row_date[:7] for row_date in rows_by_date if row_date.startswith(year_key)}, reverse=True,
             )
             for month_key in month_keys:
-                month_total = monthly_totals.get(month_key)
+                month_total = totals["monthly_totals"].get(month_key)
                 if month_total is not None:
                     year, month = month_key.split("-")
                     display_rows.append({
-                        "id": f"monthly-total:{month_key}",
-                        "entry_type": "monthly_total",
-                        "source_label": "本月合计",
-                        "month_label": f"{year}年{int(month)}月",
-                        "entry_date": f"{month_key}-01",
-                        "summary": "",
-                        "remark": None,
-                        "counterparty_account": None,
-                        "counterparty_name": None,
-                        "category": None,
-                        "income_amount": self._amount_value(month_total["income_amount"]),
-                        "expense_amount": self._amount_value(month_total["expense_amount"]),
-                        "balance": self._amount_value(month_total["balance"]) if month_total["balance"] is not None else None,
-                        "project_name": None,
-                        "department": None,
+                        "id": f"monthly-total:{month_key}", "entry_type": "monthly_total",
+                        "source_label": "本月合计", "month_label": f"{year}年{int(month)}月",
+                        "entry_date": f"{month_key}-01", "summary": "", "remark": None,
+                        "counterparty_account": None, "counterparty_name": None, "category": None,
+                        "income_amount": cls._amount_value(month_total["income_amount"]),
+                        "expense_amount": cls._amount_value(month_total["expense_amount"]),
+                        "balance": cls._amount_value(month_total["balance"]) if month_total["balance"] is not None else None,
+                        "project_name": None, "department": None,
                     })
                 month_dates = sorted(
-                    (row_date for row_date in rows_by_date if row_date.startswith(month_key)),
-                    reverse=True,
+                    (row_date for row_date in rows_by_date if row_date.startswith(month_key)), reverse=True,
                 )
                 for row_date in month_dates:
-                    day_rows = sorted(rows_by_date[row_date], key=daily_display_order)
-                    display_rows.extend(day_rows)
-        rows = display_rows
+                    display_rows.extend(sorted(rows_by_date[row_date], key=cls._daily_display_order))
+        return display_rows
+
+    @classmethod
+    def _filter_rows(cls, rows, filters, *, account=None):
+        if not filters:
+            return list(rows)
+        keyword = (filters.get("keyword") or "").casefold()
+        start_date, end_date = filters.get("start_date"), filters.get("end_date")
+        category = (filters.get("category") or "").casefold()
+        direction = filters.get("direction")
+        amount_min, amount_max = filters.get("amount_min"), filters.get("amount_max")
+        account_text = ""
+        if account is not None:
+            account_text = f"{account.name} {cls._account_label(account)}".casefold()
+        matched = []
         for row in rows:
+            if start_date and row["entry_date"] < start_date.isoformat():
+                continue
+            if end_date and row["entry_date"] > end_date.isoformat():
+                continue
+            if category and (row.get("category") or "").casefold() != category:
+                continue
+            income = cls._money(row["income_amount"])
+            expense = cls._money(row["expense_amount"])
+            if direction == "income" and income <= MONEY_ZERO:
+                continue
+            if direction == "expense" and expense <= MONEY_ZERO:
+                continue
+            amount = income + expense
+            if amount_min is not None and amount < amount_min:
+                continue
+            if amount_max is not None and amount > amount_max:
+                continue
+            if keyword:
+                searchable = " ".join(str(row.get(key) or "") for key in (
+                    "counterparty_name", "category", "summary", "remark", "project_name", "department",
+                )) + " " + account_text
+                if keyword not in searchable.casefold():
+                    continue
+            matched.append(row)
+        return matched
+
+    @classmethod
+    def _matched_summary(cls, rows, *, account_count=None):
+        return {
+            "matching_count": len(rows),
+            "income_amount": cls._amount_value(sum((cls._money(row["income_amount"]) for row in rows), MONEY_ZERO)),
+            "expense_amount": cls._amount_value(sum((cls._money(row["expense_amount"]) for row in rows), MONEY_ZERO)),
+            **({"account_count": account_count} if account_count is not None else {}),
+        }
+
+    @staticmethod
+    def _account_label(account):
+        number = account.account_number
+        tail = number[-4:] if number and len(number) > 4 else None
+        label = account.name + (f"（尾号 {tail}）" if tail else "（账号已隐藏）" if number else "")
+        type_labels = {"wechat": "微信", "alipay": "支付宝", "cash": "现金", "other": "其他"}
+        return f"{type_labels[account.account_type]} · {label}" if account.account_type != "bank" else label
+
+    async def _load_account_rows(self, accounts):
+        account_ids = [account.id for account in accounts]
+        rows_by_account = {account_id: [] for account_id in account_ids}
+        if not account_ids:
+            return {}, rows_by_account
+
+        openings = (await self.db.execute(select(BankLedgerEntry).where(
+            BankLedgerEntry.account_id.in_(account_ids),
+            BankLedgerEntry.entry_type == "opening_balance",
+        ))).scalars().all()
+        openings_by_account = {opening.account_id: opening for opening in openings}
+        opening_dates = {account_id: opening.entry_date for account_id, opening in openings_by_account.items()}
+
+        expenditure_service = ExpenditureService(self.db, self.viewer)
+        if len(accounts) == 1:
+            account_id = account_ids[0]
+            cash_payments = await expenditure_service.list_account_cash_payments(
+                account_id, start_date=opening_dates.get(account_id),
+            )
+        else:
+            cash_payments = await expenditure_service.list_account_cash_payments_for_accounts(account_ids)
+        receipts_query = (
+            select(
+                Payment.id, Payment.payment_account_id, Payment.payment_no, Payment.document_id, Payment.paid_at,
+                Payment.amount, Payment.remark, Customer.name.label("customer_name"),
+                BusinessDocument.project_name, BusinessDocument.department,
+            )
+            .join(Customer, Customer.id == Payment.customer_id)
+            .outerjoin(BusinessDocument, BusinessDocument.id == Payment.document_id)
+            .where(
+                Payment.payment_account_id.in_(account_ids),
+                Payment.record_type == "receipt",
+                Payment.is_voided.is_(False),
+                Payment.paid_at.is_not(None),
+            )
+        )
+        if len(accounts) == 1:
+            opening_date = opening_dates.get(account_ids[0])
+            if opening_date:
+                receipts_query = receipts_query.where(
+                    Payment.paid_at >= datetime.combine(opening_date, datetime.min.time()),
+                )
+        receipts = (await self.db.execute(receipts_query)).mappings().all()
+        manual_query = select(BankLedgerEntry).where(
+            BankLedgerEntry.account_id.in_(account_ids),
+            BankLedgerEntry.entry_type == "manual",
+        ).options(selectinload(BankLedgerEntry.category_record))
+        if len(accounts) == 1:
+            opening_date = opening_dates.get(account_ids[0])
+            if opening_date:
+                manual_query = manual_query.where(BankLedgerEntry.entry_date >= opening_date)
+        manual_entries = (await self.db.execute(
+            manual_query.order_by(BankLedgerEntry.account_id, BankLedgerEntry.entry_date, BankLedgerEntry.created_at)
+        )).scalars().all()
+
+        can_read_receipts = user_has_permission(self.viewer, "payment:read")
+        for receipt in receipts:
+            account_id = receipt["payment_account_id"]
+            paid_at = receipt["paid_at"]
+            opening_date = opening_dates.get(account_id)
+            if opening_date and paid_at < datetime.combine(opening_date, datetime.min.time()):
+                continue
+            row_date = paid_at.date()
+            document_id = receipt["document_id"] if can_read_receipts else None
+            rows_by_account[account_id].append({
+                "id": "receipt:" + str(receipt["id"]), "entry_type": "source_receipt",
+                "source_label": "客户收款", "source_kind": "receipt",
+                "source_id": str(receipt["id"]) if can_read_receipts else None,
+                "document_id": str(document_id) if document_id else None,
+                "document_type": "order" if document_id else None,
+                "entry_date": row_date.isoformat(),
+                "summary": (receipt["remark"] or "") if can_read_receipts else "",
+                "remark": None, "counterparty_account": None,
+                "counterparty_name": receipt["customer_name"] if can_read_receipts else None,
+                "category": "客户收款", "income_amount": self._money(receipt["amount"]),
+                "expense_amount": MONEY_ZERO, "balance": None,
+                "project_name": receipt["project_name"] if can_read_receipts else None,
+                "department": receipt["department"] if can_read_receipts else None,
+                "_sort": (row_date, 1, paid_at.isoformat(), str(receipt["id"])),
+            })
+
+        for payment in cash_payments:
+            account_id = payment["payment_account_id"]
+            paid_at = payment["paid_at"]
+            opening_date = opening_dates.get(account_id)
+            if opening_date and paid_at < datetime.combine(opening_date, datetime.min.time()):
+                continue
+            row_date = paid_at.date()
+            rows_by_account[account_id].append({
+                "id": str(payment["row_key"]), "entry_type": "source_payment",
+                "source_label": {
+                    "expense": "费用付款", "project_cost": "项目成本付款",
+                    "outsource_task": "外协付款", "outsource_payment": "外协付款",
+                }.get(payment["source_kind"], "ERP付款"),
+                "source_kind": payment["source_kind"], "source_id": str(payment["source_id"]),
+                "document_id": str(payment["document_id"]) if payment["document_id"] else None,
+                "document_type": payment["document_type"], "entry_date": row_date.isoformat(),
+                "summary": payment.get("description") or "", "remark": payment.get("remark"),
+                "counterparty_account": None, "counterparty_name": payment.get("supplier_name"),
+                "category": payment.get("category"), "_category_code": payment.get("category_code"),
+                "income_amount": MONEY_ZERO, "expense_amount": self._money(payment["amount"]),
+                "balance": None, "project_name": payment.get("project_name"),
+                "department": payment.get("department"),
+                "_sort": (row_date, 1, paid_at.isoformat(), str(payment["row_key"])),
+            })
+
+        for entry in manual_entries:
+            opening_date = opening_dates.get(entry.account_id)
+            if opening_date and entry.entry_date < opening_date:
+                continue
+            amount = self._money(entry.amount)
+            is_income = entry.direction == "income"
+            rows_by_account[entry.account_id].append({
+                "id": str(entry.id), "entry_type": "manual", "source_label": "手工登记",
+                "entry_date": entry.entry_date.isoformat(), "summary": entry.summary,
+                "remark": None, "counterparty_account": entry.counterparty_account,
+                "counterparty_name": entry.counterparty_name,
+                "counterparty_supplier_id": str(entry.counterparty_supplier_id) if entry.counterparty_supplier_id else None,
+                "category": entry.category, "_category_code": entry.category_record.code if entry.category_record else None,
+                "income_amount": amount if is_income else MONEY_ZERO,
+                "expense_amount": MONEY_ZERO if is_income else amount, "balance": None,
+                "project_name": entry.project_name, "department": entry.department,
+                "order_id": str(entry.order_id) if entry.order_id else None,
+                "_sort": (entry.entry_date, 2, entry.created_at.isoformat() if entry.created_at else "", str(entry.id)),
+            })
+
+        for account_id, opening in openings_by_account.items():
+            opening_amount = self._money(opening.amount)
+            rows_by_account[account_id].append({
+                "id": "opening:" + str(opening.id), "entry_type": "opening_balance",
+                "source_label": "期初", "entry_date": opening.entry_date.isoformat(),
+                "summary": "", "remark": None, "counterparty_account": None,
+                "counterparty_name": None, "category": "期初余额",
+                "income_amount": MONEY_ZERO, "expense_amount": MONEY_ZERO,
+                "balance": opening_amount, "project_name": None, "department": None,
+                "_sort": (opening.entry_date, 0, "", str(opening.id)),
+            })
+        return openings_by_account, rows_by_account
+
+    async def _account_ledger_data(self, account):
+        openings, rows_by_account = await self._load_account_rows([account])
+        opening = openings.get(account.id)
+        rows, totals = self._calculate_account_rows(rows_by_account[account.id], opening)
+        return opening, rows, totals
+
+    async def get_ledger(self, account_id: UUID, page=1, page_size=20, *, filters=None):
+        if page < 1 or not 1 <= page_size <= 200:
+            raise ValueError("列表参数无效")
+        filters = self._normalize_filters(filters)
+        account = await self._account(account_id)
+        opening, rows, totals = await self._account_ledger_data(account)
+        if self._filters_active(filters):
+            rows = self._detail_display_order(self._filter_rows(rows, filters, account=account))
+            matched_summary = self._matched_summary(rows)
+        else:
+            rows = self._period_display_rows(rows, totals)
+            matched_summary = None
+        total = len(rows)
+        page_rows = rows[(page - 1) * page_size:page * page_size]
+        for row in page_rows:
             row.pop("_sort", None)
             row.pop("_category_code", None)
-        total = len(rows)
-        start = (page - 1) * page_size
-        page_rows = rows[start:start + page_size]
-        return {
-            "items": page_rows,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
+        result = {
+            "items": page_rows, "total": total, "page": page, "page_size": page_size,
             "opening_balance": self._opening_payload(opening),
             "summary": {
-                "opening_balance": self._amount_value(opening_amount) if opening_amount is not None else None,
-                "income_amount": self._amount_value(income_total),
-                "expense_amount": self._amount_value(expense_total),
-                "balance": self._amount_value(balance) if balance is not None else None,
-                "transaction_count": transaction_count,
+                "opening_balance": self._amount_value(totals["opening_amount"]) if totals["opening_amount"] is not None else None,
+                "income_amount": self._amount_value(totals["income_amount"]),
+                "expense_amount": self._amount_value(totals["expense_amount"]),
+                "balance": self._amount_value(totals["balance"]) if totals["balance"] is not None else None,
+                "transaction_count": totals["transaction_count"],
+            },
+        }
+        if matched_summary is not None:
+            result["matched_summary"] = matched_summary
+        return result
+
+    async def search_ledgers(self, page=1, page_size=20, *, filters=None, account_id=None):
+        if page < 1 or not 1 <= page_size <= 200:
+            raise ValueError("列表参数无效")
+        filters = self._normalize_filters(filters)
+        query = select(CompanyAccount).where(CompanyAccount.account_type.in_(SUPPORTED_ACCOUNT_TYPES))
+        if account_id is not None:
+            query = query.where(CompanyAccount.id == account_id)
+        accounts = (await self.db.execute(query.order_by(CompanyAccount.name))).scalars().all()
+        if account_id is not None and not accounts:
+            await self._account(account_id)
+            raise ValueError("公司账户不存在")
+
+        openings, rows_by_account = await self._load_account_rows(accounts)
+        matched_rows = []
+        matched_income = MONEY_ZERO
+        matched_expense = MONEY_ZERO
+        matched_accounts = set()
+        for account in accounts:
+            rows, _totals = self._calculate_account_rows(
+                rows_by_account[account.id], openings.get(account.id),
+            )
+            rows = self._detail_display_order(self._filter_rows(rows, filters, account=account))
+            if rows:
+                matched_accounts.add(account.id)
+            label = self._account_label(account)
+            for row in rows:
+                matched_income += self._money(row["income_amount"])
+                matched_expense += self._money(row["expense_amount"])
+                row["account_id"] = str(account.id)
+                row["account_name"] = account.name
+                row["account_label"] = label
+                row["account_is_active"] = account.is_active
+                row["counterparty_account"] = None
+                matched_rows.append(row)
+
+        # Stable sorting keeps each account's same-day fee/expense/income order
+        # while putting the newest transactions first across all accounts.
+        matched_rows.sort(key=lambda row: row["account_label"].casefold())
+        matched_rows.sort(key=lambda row: row["entry_date"], reverse=True)
+        total = len(matched_rows)
+        page_rows = matched_rows[(page - 1) * page_size:page * page_size]
+        for row in page_rows:
+            row.pop("_sort", None)
+            row.pop("_category_code", None)
+        return {
+            "items": page_rows, "total": total, "page": page, "page_size": page_size,
+            "summary": {
+                "matching_count": total,
+                "income_amount": self._amount_value(matched_income),
+                "expense_amount": self._amount_value(matched_expense),
+                "account_count": len(matched_accounts),
             },
         }
 
