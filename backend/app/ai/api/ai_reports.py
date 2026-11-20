@@ -48,7 +48,7 @@ async def get_business_narrative(
     Always works in rule-based mode (template-driven). AI-enhanced mode
     adds free-form LLM narrative when AI is configured.
     """
-    composer = ReportComposer(db)
+    composer = ReportComposer(db, viewer=current_user)
     report = await composer.generate_report(
         period=period,
         year=year,

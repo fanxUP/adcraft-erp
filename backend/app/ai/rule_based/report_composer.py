@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.report_service import ReportService
 from app.ai.rule_based.anomaly_detector import AnomalyDetector
+from app.models.user import User
+from app.services.report_service import ReportService
 
 # Narrative templates with {placeholder} interpolation
 WEEKLY_TEMPLATE = (
@@ -50,13 +51,13 @@ class ReportComposer:
     """Generate structured business narrative reports using templates.
 
     Usage:
-        composer = ReportComposer(db)
+        composer = ReportComposer(db, viewer=current_user)
         report = await composer.generate_report("monthly", year=2026, month=6)
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, viewer: User | None = None) -> None:
         self.db = db
-        self.report_service = ReportService(db)
+        self.report_service = ReportService(db, viewer=viewer)
 
     async def generate_report(
         self,
