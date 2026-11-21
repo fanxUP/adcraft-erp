@@ -497,7 +497,11 @@ import { expenditureSourceTarget } from '@/utils/expenditure'
 import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
-const INCOME_CATEGORIES = ['主营业务收入', '其他业务收入', '高空作业车', '其他收入', '利息收入', '借款', '张江', '投标保证金', '过账']
+const INTERNAL_TRANSFER_CATEGORY = '内部账户调拨'
+const INCOME_CATEGORIES = [
+  '主营业务收入', '其他业务收入', '高空作业车', '其他收入', '利息收入',
+  '借款', '张江', '投标保证金', '过账', INTERNAL_TRANSFER_CATEGORY,
+]
 const ALL_ACCOUNTS_SCOPE = '__all_accounts__'
 type CounterpartySuggestion = {
   id: string
@@ -616,10 +620,16 @@ const searchCategoryOptions = computed(() => Array.from(new Set([
   ...financeCategories.value.map(category => category.name),
 ])))
 const categoryOptions = computed(() => {
-  if (entryPurpose.value === 'project_cost') return financeCategories.value.map(category => category.name)
-  return entryForm.direction === 'income'
-    ? INCOME_CATEGORIES
-    : financeCategories.value.map(category => category.name)
+  if (entryPurpose.value === 'project_cost') {
+    return financeCategories.value
+      .map(category => category.name)
+      .filter(category => category !== INTERNAL_TRANSFER_CATEGORY)
+  }
+  if (entryForm.direction === 'income') return INCOME_CATEGORIES
+  return Array.from(new Set([
+    ...financeCategories.value.map(category => category.name),
+    INTERNAL_TRANSFER_CATEGORY,
+  ]))
 })
 const entryPurposeHint = computed(() => ({
   manual: '适用于手续费、利息等独立流水。已在系统登记的业务收付款请勿重复补录。',
