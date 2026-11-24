@@ -102,6 +102,9 @@ class PaymentService:
         customer_id: UUID | None = None,
         is_voided: bool | None = None,
         contract_id: UUID | None = None,
+        *,
+        archived: bool = False,
+        exclude_bank_receipts: bool = False,
     ) -> tuple[list, int]:
         skip = (page - 1) * page_size
         payments, total = await self.repo.list_payments(
@@ -111,6 +114,8 @@ class PaymentService:
             customer_id,
             is_voided,
             contract_id,
+            archived=archived,
+            exclude_bank_receipts=exclude_bank_receipts,
         )
         return [self._to_dict(p) for p in payments], total
 
@@ -135,7 +140,7 @@ class PaymentService:
         if order.status in ("pending_confirm", "cancelled") or order.deleted_at is not None:
             raise ValueError("当前订单状态不允许登记收款")
 
-    async def _new_receipt(self, data, order_id, customer_id, amount, created_by):
+    async def _new_receipt(self, data, order_id, customer_id, amount, created_by, *, bank_ledger_entry_id=None):
         return Payment(
             payment_no=await generate_payment_no(self.db),
             document_id=order_id,
@@ -143,6 +148,7 @@ class PaymentService:
             amount=amount,
             request_id=_uuid_or_none(data.get("request_id")),
             payment_account_id=_uuid_or_none(data.get("payment_account_id")),
+            bank_ledger_entry_id=bank_ledger_entry_id,
             payment_method=data.get("payment_method"),
             paid_at=datetime.fromisoformat(data["paid_at"]) if data.get("paid_at") else None,
             remark=data.get("remark"),
@@ -174,7 +180,10 @@ class PaymentService:
         await statement_service.refresh_drafts_for_customer(customer_id)
         return self._to_dict(payment)
 
-    async def create_payment(self, data: dict, created_by: UUID, *, allow_standalone: bool = False) -> dict:
+    async def create_payment(
+        self, data: dict, created_by: UUID, *, allow_standalone: bool = False,
+        bank_ledger_entry_id: UUID | None = None,
+    ) -> dict:
         """Create a contract-based receipt and immutable allocations.
 
         ``order_id`` is retained for old clients. It resolves to the unique
@@ -209,14 +218,16 @@ class PaymentService:
             if len(contract_ids) > 1:
                 raise ValueError("该订单关联了多个合同，请先明确收款合同")
             if not contract_ids:
-                if allow_standalone:
+                if allow_standalone and not bank_ledger_entry_id:
                     return await self._create_standalone_receipt(data, document_id, customer_id, amount, created_by)
                 raise ValueError("该订单尚未关联合同，请先关联合同后再登记收款")
             contract_id = contract_ids[0]
 
-        contract = await self.db.get(Contract, contract_id, with_for_update=True)
+        contract = await self.db.get(Contract, contract_id, with_for_update=True, populate_existing=True)
         if not contract or contract.deleted_at is not None:
             raise ValueError("合同不存在或已删除")
+        if bank_ledger_entry_id and contract.status in ("cancelled", "terminated"):
+            raise ValueError("合同已取消或终止，请选择有效合同")
         if contract.customer_id != customer_id:
             raise ValueError("收款客户与合同不一致")
 
@@ -271,7 +282,10 @@ class PaymentService:
             if len(order_ids) == 1:
                 compatibility_document_id = order_ids[0]
 
-        payment = await self._new_receipt(data, compatibility_document_id, customer_id, amount, created_by)
+        payment = await self._new_receipt(
+            data, compatibility_document_id, customer_id, amount, created_by,
+            bank_ledger_entry_id=bank_ledger_entry_id,
+        )
         if compatibility_document_id:
             payment.document = locked_orders.get(compatibility_document_id)
         await StatementService(self.db).capture_confirmed_for_customer(customer_id)
@@ -322,7 +336,7 @@ class PaymentService:
         await StatementService(self.db).refresh_drafts_for_customer(customer_id)
         return self._to_dict(payment)
 
-    async def void_payment(self, payment_id: UUID, reason: str) -> dict:
+    async def void_payment(self, payment_id: UUID, reason: str, *, bank_ledger_entry_id: UUID | None = None) -> dict:
         reason = reason.strip()
         if not reason:
             raise ValueError("作废原因不能为空")
@@ -330,12 +344,16 @@ class PaymentService:
         p = await self.repo.get_by_id(payment_id, for_update=True)
         if not p:
             raise ValueError("收款记录不存在")
+        if _uuid_or_none(getattr(p, "archive_batch_id", None)):
+            raise ValueError("历史归档收款仅供核对")
+        if _uuid_or_none(getattr(p, "bank_ledger_entry_id", None)) != bank_ledger_entry_id:
+            raise ValueError("请从银行台账收款记录中解除关联")
         if p.is_voided:
             raise ValueError("该收款已作废")
 
         from sqlalchemy import exists
         has_refunds = (await self.db.execute(select(exists().where(
-            Payment.reference_payment_id == p.id, Payment.is_voided.is_(False))))).scalar()
+            Payment.reference_payment_id == p.id, Payment.active())))).scalar()
         if has_refunds is True:
             raise ValueError("该收款已有实际退款，请先核对退款流水，不能直接作废原收款")
 
@@ -438,6 +456,8 @@ class PaymentService:
             "reference_payment_id": str(p.reference_payment_id) if isinstance(getattr(p, "reference_payment_id", None), UUID) else None,
             "payment_method": p.payment_method,
             "payment_account_id": str(p.payment_account_id) if isinstance(getattr(p, "payment_account_id", None), UUID) else None,
+            "bank_sourced": isinstance(getattr(p, "bank_ledger_entry_id", None), UUID),
+            "archive_batch_id": str(p.archive_batch_id) if isinstance(getattr(p, "archive_batch_id", None), UUID) else None,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
             "is_voided": p.is_voided,

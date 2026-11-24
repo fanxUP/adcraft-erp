@@ -493,12 +493,13 @@ class OrderManagementService:
         rows, _ = await repo.list_payments(order_id=order_id, limit=200)
         # Include contract-only credit candidates for this same customer.
         credits = (await self.db.execute(select(Payment).options(selectinload(Payment.document).selectinload(BusinessDocument.customer), selectinload(Payment.allocations).selectinload(PaymentAllocation.contract), selectinload(Payment.allocations).selectinload(PaymentAllocation.document))
-            .where(Payment.customer_id == doc.customer_id, Payment.is_voided.is_(False), Payment.amount > 0)
+            .where(Payment.customer_id == doc.customer_id, Payment.active(), Payment.amount > 0)
             .order_by(Payment.created_at.desc()).limit(200))).scalars().all()
         present = {row.id for row in rows}
         rows += [row for row in credits if row.id not in present and any(a.document_id is None for a in row.allocations)]
         payments = [PaymentService(self.db)._to_dict(row) for row in rows]
         result = {"order_id": str(doc.id), **settlement_values(doc.total_amount, await repo.get_document_paid_sum(doc.id), doc.cost_amount), "payments": payments}
+        result["use_contract_receipts"] = bool(await repo.get_contract_ids_for_document(doc.id))
         if not self.documents.can_view_finance_cost:
             result.pop("cost_amount", None); result.pop("gross_profit", None)
         return result
@@ -549,7 +550,7 @@ class OrderManagementService:
             await self.db.flush()
             return await self.funds(order_id)
         payment = await PaymentRepository(self.db).get_by_id(data["payment_id"], for_update=True)
-        if not payment or payment.is_voided or payment.amount <= 0 or payment.customer_id != doc.customer_id:
+        if not payment or payment.is_voided or payment.archive_batch_id or payment.amount <= 0 or payment.customer_id != doc.customer_id:
             raise ValueError("请选择同一客户的有效原始收款凭据")
         amount, operation = money(data["amount"]), data["operation"]
         allocations = list(payment.allocations)
@@ -560,7 +561,7 @@ class OrderManagementService:
         # Refunds use their own negative payment rows. Count previous refunds
         # against this original receipt, even if other orders share the header.
         refunded = money((await self.db.execute(select(func.coalesce(func.sum(Payment.amount), 0)).where(
-            Payment.reference_payment_id == payment.id, Payment.document_id == doc.id, Payment.is_voided.is_(False)))).scalar())
+            Payment.reference_payment_id == payment.id, Payment.document_id == doc.id, Payment.active()))).scalar())
         available += refunded
         paid = money(await PaymentRepository(self.db).get_document_paid_sum(doc.id))
         if operation in {"refund", "release_credit"}:
@@ -581,7 +582,7 @@ class OrderManagementService:
                 # Earlier refund allocations reduce the available contract slice.
                 old_refunds = money((await self.db.execute(select(func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0))
                     .join(Payment, Payment.id == PaymentAllocation.payment_id).where(Payment.reference_payment_id == payment.id,
-                    Payment.document_id == doc.id, Payment.is_voided.is_(False), PaymentAllocation.contract_id == contract_id))).scalar())
+                    Payment.document_id == doc.id, Payment.active(), PaymentAllocation.contract_id == contract_id))).scalar())
                 used = min(remaining, max(capacity + old_refunds, ZERO))
                 if used:
                     self.db.add(PaymentAllocation(payment_id=refund.id, contract_id=contract_id, document_id=doc.id,

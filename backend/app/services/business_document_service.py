@@ -1783,7 +1783,7 @@ class BusinessDocumentService:
             .join(Payment, Payment.id == PaymentAllocation.payment_id)
             .where(
                 PaymentAllocation.document_id == doc_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
             .scalar_subquery()
         )
@@ -1792,7 +1792,7 @@ class BusinessDocumentService:
             .select_from(Payment)
             .where(
                 Payment.document_id == doc_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 ~exists(
                     select(PaymentAllocation.id).where(
                         PaymentAllocation.payment_id == Payment.id
@@ -2361,7 +2361,7 @@ class BusinessDocumentService:
                     )
                 )
                 query = select(model).where(
-                    Payment.is_voided.is_(False),
+                    Payment.active(),
                     or_(
                         payment_has_order_allocation,
                         (Payment.document_id == doc.id) & payment_has_no_allocation,
@@ -2631,7 +2631,7 @@ class BusinessDocumentService:
         relations = {
             "payments": await self._count(
                 select(func.count(Payment.id)).where(
-                    Payment.is_voided.is_(False),
+                    Payment.active(),
                     or_(
                         payment_has_order_allocation,
                         (Payment.document_id == doc.id) & payment_has_no_allocation,
@@ -3291,7 +3291,7 @@ class BusinessDocumentService:
         )
         payment_count = await self._count(
             select(func.count(Payment.id)).where(
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 or_(
                     payment_has_order_allocation,
                     (Payment.document_id == doc.id) & payment_has_no_allocation,

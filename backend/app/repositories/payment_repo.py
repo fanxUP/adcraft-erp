@@ -100,12 +100,18 @@ class PaymentRepository:
         customer_id: UUID | None = None,
         is_voided: bool | None = None,
         contract_id: UUID | None = None,
+        *,
+        archived: bool = False,
+        exclude_bank_receipts: bool = False,
     ) -> tuple[list[Payment], int]:
         q = select(Payment).execution_options(populate_existing=True).options(
             selectinload(Payment.document).selectinload(BusinessDocument.customer),
             selectinload(Payment.allocations).selectinload(PaymentAllocation.contract),
             selectinload(Payment.allocations).selectinload(PaymentAllocation.document),
         )
+        q = q.where(Payment.archive_batch_id.is_not(None) if archived else Payment.archive_batch_id.is_(None))
+        if exclude_bank_receipts:
+            q = q.where(Payment.bank_ledger_entry_id.is_(None))
         allocation_exists = exists(
             select(PaymentAllocation.id).where(
                 PaymentAllocation.payment_id == Payment.id
@@ -181,7 +187,7 @@ class PaymentRepository:
             q = q.where(Payment.is_voided == is_voided)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
-        q = q.order_by(Payment.created_at.desc()).offset(skip).limit(limit)
+        q = q.order_by(Payment.created_at.desc(), Payment.id.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all()), total
 
@@ -210,14 +216,14 @@ class PaymentRepository:
             .join(Payment, Payment.id == PaymentAllocation.payment_id)
             .where(
                 PaymentAllocation.document_id == document_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
         )
         legacy = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
             .where(
                 Payment.document_id == document_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 ~exists(
                     select(PaymentAllocation.id).where(
                         PaymentAllocation.payment_id == Payment.id
@@ -312,7 +318,7 @@ class PaymentRepository:
             .join(Payment, Payment.id == PaymentAllocation.payment_id)
             .where(
                 PaymentAllocation.contract_id.in_(contract_ids),
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
             .group_by(PaymentAllocation.contract_id)
         )
@@ -335,7 +341,7 @@ class PaymentRepository:
             .join(unique_links, unique_links.c.document_id == Payment.document_id)
             .where(
                 unique_links.c.contract_id.in_(contract_ids),
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 allocation_exists,
             )
         ).subquery("legacy_contract_receipts")
@@ -374,7 +380,7 @@ class PaymentRepository:
             .where(
                 FrameworkContractProjectDocument.project_id.in_(project_ids),
                 PaymentAllocation.contract_id == FrameworkContractProject.contract_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
             .group_by(FrameworkContractProjectDocument.project_id)
         )
@@ -395,7 +401,7 @@ class PaymentRepository:
             .where(
                 FrameworkContractProjectDocument.project_id.in_(project_ids),
                 FrameworkContractProject.deleted_at.is_(None),
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 ~exists(
                     select(PaymentAllocation.id).where(
                         PaymentAllocation.payment_id == Payment.id
@@ -462,7 +468,7 @@ class StatementRepository:
             select(Payment).where(
                 and_(
                     Payment.customer_id == customer_id,
-                    Payment.is_voided == False,
+                    Payment.active(),
                     Payment.paid_at >= start,
                     Payment.paid_at <= end,
                 )

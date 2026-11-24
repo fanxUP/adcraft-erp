@@ -57,7 +57,7 @@ class ContractService:
             .join(Payment, Payment.id == PaymentAllocation.payment_id)
             .where(
                 PaymentAllocation.contract_id == contract_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
             .scalar_subquery()
         )
@@ -70,7 +70,7 @@ class ContractService:
                 unique_links.c.document_id == Payment.document_id,
             )
             .where(
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 ~exists(
                     select(PaymentAllocation.id).where(
                         PaymentAllocation.payment_id == Payment.id
@@ -99,7 +99,7 @@ class ContractService:
             .join(Payment, Payment.id == PaymentAllocation.payment_id)
             .where(
                 PaymentAllocation.contract_id.in_(contract_ids),
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
         )
         allocation_exists = ~exists(
@@ -118,7 +118,7 @@ class ContractService:
             .join(unique_links, unique_links.c.document_id == Payment.document_id)
             .where(
                 unique_links.c.contract_id.in_(contract_ids),
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 allocation_exists,
             )
         ).subquery("legacy_contract_receipts")
@@ -501,8 +501,17 @@ class ContractService:
         return self._redact_financial_fields(self._to_detail(contract))
 
     async def delete_contract(self, contract_id: UUID) -> bool:
-        contract = await self.repo.get_by_id(contract_id)
-        if not contract:
+        from sqlalchemy import select
+        from app.models.contract import Contract
+        from app.models.payment import Payment, PaymentAllocation
+
+        contract = await self.db.get(Contract, contract_id, with_for_update=True, populate_existing=True)
+        if not contract or contract.deleted_at is not None:
             return False
+        if await self.db.scalar(select(Payment.id).join(PaymentAllocation).where(
+            PaymentAllocation.contract_id == contract_id,
+            Payment.bank_ledger_entry_id.is_not(None), Payment.active(),
+        ).limit(1)):
+            raise ValueError("合同还有银行流水关联，请先在应收管理解除关联")
         await self.repo.soft_delete(contract)
         return True

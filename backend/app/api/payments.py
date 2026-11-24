@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.file_security import confined_path, safe_upload_name
 from app.core.permissions import (
+    PERM_COMPANY_ACCOUNT_LEDGER_READ,
     PERM_EXPENSE_CREATE,
     PERM_EXPENSE_DELETE,
     PERM_EXPENSE_READ,
@@ -33,6 +34,8 @@ from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
 from app.models.user import User
 from app.schemas.payment import (
+    BankReceiptLink,
+    BankReceiptUnlink,
     DebtSettleCreate,
     ExpenseCreate,
     ExpenseDeleteConfirmed,
@@ -46,6 +49,7 @@ from app.schemas.payment import (
 from app.schemas.common import success, success_paginated
 from app.services.company_account_service import require_account_selection
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
+from app.services.bank_receipt_service import BankReceiptService
 from app.services.project_cost_service import ProjectCostService
 from app.services.finance_category_service import FinanceCategoryService
 from app.services.business_document_service import OrderDataMutationLocked
@@ -106,6 +110,8 @@ async def list_payments(
     contract_id: str | None = None,
     customer_id: str | None = None,
     is_voided: bool | None = None,
+    archived: bool = False,
+    exclude_bank_receipts: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PAYMENT_READ)),
 ):
@@ -120,8 +126,94 @@ async def list_payments(
         cid,
         is_voided,
         contract_uuid,
+        archived=archived,
+        exclude_bank_receipts=exclude_bank_receipts,
     )
     return success_paginated(payments, total, page, page_size)
+
+
+@pay_router.get("/bank-receipts")
+async def list_bank_receipts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    account_id: UUID | None = None,
+    status: Literal["unlinked", "linked", "review"] | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    keyword: str | None = Query(None, max_length=120),
+    contract_id: UUID | None = None,
+    order_id: UUID | None = None,
+    customer_id: UUID | None = None,
+    entry_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_all_permissions(PERM_PAYMENT_READ, PERM_COMPANY_ACCOUNT_LEDGER_READ)),
+):
+    try:
+        rows, total = await BankReceiptService(db).list_entries(
+            page, page_size, account_id=account_id, status=status, start_date=start_date,
+            end_date=end_date, keyword=keyword, contract_id=contract_id, order_id=order_id,
+            customer_id=customer_id, entry_id=entry_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return success_paginated(rows, total, page, page_size)
+
+
+@pay_router.post("/bank-receipts/{entry_id}/link")
+async def link_bank_receipt(
+    entry_id: UUID,
+    data: BankReceiptLink,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_all_permissions(
+        PERM_PAYMENT_READ, PERM_COMPANY_ACCOUNT_LEDGER_READ, PERM_PAYMENT_CREATE,
+    )),
+):
+    try:
+        payment = await BankReceiptService(db).link(
+            entry_id, data.contract_id, data.order_id, expected_amount=data.expected_amount,
+            expected_date=data.expected_date, created_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await log_operation(
+        db, current_user.id, current_user.real_name or current_user.username,
+        OBJ_PAYMENT, UUID(payment["id"]), "link_bank_receipt",
+        ip_address=request.client.host if request.client else None,
+        after_data={
+            "bank_ledger_entry_id": str(entry_id), "contract_id": str(data.contract_id),
+            "amount": payment["amount"], "payment_no": payment["payment_no"],
+            "allocations": payment["allocations"],
+        },
+    )
+    return success(payment)
+
+
+@pay_router.post("/bank-receipts/{entry_id}/unlink")
+async def unlink_bank_receipt(
+    entry_id: UUID,
+    data: BankReceiptUnlink,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_all_permissions(
+        PERM_PAYMENT_READ, PERM_COMPANY_ACCOUNT_LEDGER_READ, PERM_PAYMENT_VOID,
+    )),
+):
+    try:
+        payment = await BankReceiptService(db).unlink(entry_id, data.payment_id, data.reason)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await log_operation(
+        db, current_user.id, current_user.real_name or current_user.username,
+        OBJ_PAYMENT, data.payment_id, "unlink_bank_receipt",
+        ip_address=request.client.host if request.client else None,
+        before_data={
+            "bank_ledger_entry_id": str(entry_id), "contract_id": payment["contract_id"],
+            "amount": payment["amount"], "allocations": payment["allocations"],
+        },
+        after_data={"reason": data.reason.strip()},
+    )
+    return success(payment)
 
 
 @pay_router.get("/{payment_id}")
@@ -184,6 +276,12 @@ async def upload_receipt(
     from app.core.config import settings
     from app.models.payment import Payment as PaymentModel
 
+    p = await PaymentService(db).repo.get_by_id(UUID(payment_id), for_update=True)
+    if not p:
+        return {"code": 40401, "message": "收款记录不存在", "data": None}
+    if p.archive_batch_id:
+        raise HTTPException(409, "历史归档收款仅供核对")
+
     ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
     month_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, month_dir)
@@ -197,10 +295,6 @@ async def upload_receipt(
         f.write(contents)
     await file.close()
 
-    service = PaymentService(db)
-    p = await service.repo.get_by_id(UUID(payment_id))
-    if not p:
-        return {"code": 40401, "message": "收款记录不存在", "data": None}
     rel_path = f"{month_dir}/{stored_name}"
     await db.execute(
         update(PaymentModel).where(PaymentModel.id == p.id).values(receipt_url=rel_path)

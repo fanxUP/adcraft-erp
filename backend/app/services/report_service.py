@@ -222,7 +222,7 @@ class ReportService:
                 Payment.customer_id,
                 func.max(Payment.paid_at).label("last_payment"),
             )
-            .where(Payment.customer_id.in_(customer_ids), Payment.is_voided == False)
+            .where(Payment.customer_id.in_(customer_ids), Payment.active())
             .group_by(Payment.customer_id)
         )
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
@@ -268,7 +268,7 @@ class ReportService:
                 .where(
                     PaymentAllocation.contract_id.in_(contract_ids),
                     Contract.contract_type != "框架合同",
-                    Payment.is_voided.is_(False),
+                    Payment.active(),
                 )
             )
             unique_links = active_unambiguous_contract_links()
@@ -283,7 +283,7 @@ class ReportService:
                 .where(
                     unique_links.c.contract_id.in_(contract_ids),
                     Contract.contract_type != "框架合同",
-                    Payment.is_voided.is_(False),
+                    Payment.active(),
                     allocation_exists,
                 )
             )
@@ -313,7 +313,7 @@ class ReportService:
                     .where(
                         PaymentAllocation.contract_id.in_(fw_contract_ids_paid),
                         Contract.contract_type == "框架合同",
-                        Payment.is_voided.is_(False),
+                        Payment.active(),
                     )
                 )
                 fw_legacy_rows = (
@@ -327,7 +327,7 @@ class ReportService:
                     .where(
                         unique_links.c.contract_id.in_(fw_contract_ids_paid),
                         Contract.contract_type == "框架合同",
-                        Payment.is_voided.is_(False),
+                        Payment.active(),
                         allocation_exists,
                     )
                 )
@@ -466,7 +466,7 @@ class ReportService:
     async def _sum_payments(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
-            .where(and_(Payment.is_voided == False, Payment.paid_at >= start, Payment.paid_at < end))
+            .where(and_(Payment.active(), Payment.paid_at >= start, Payment.paid_at < end))
         )
         return result.scalar() or 0
 
@@ -541,7 +541,7 @@ class ReportService:
         end_at = end if end.time() == time.min else datetime.combine(end.date() + timedelta(days=1), time.min)
         result = await self.db.execute(
             select(Payment).where(
-                and_(Payment.is_voided.is_(False), Payment.paid_at >= start, Payment.paid_at < end_at)
+                and_(Payment.active(), Payment.paid_at >= start, Payment.paid_at < end_at)
             ).order_by(Payment.paid_at.desc())
         )
         return list(result.scalars().all())

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.permissions import (
+    PERM_COMPANY_ACCOUNT_LEDGER_READ,
     PERM_FINANCE_VIEW_COST,
     PERM_OUTSOURCE_CENTER_READ,
     PERM_OUTSOURCE_PAYMENT_READ,
@@ -56,7 +57,10 @@ async def get_receipt_cashflow(
     current_user: User = Depends(require_permission(PERM_PAYMENT_READ)),
 ):
     try:
-        result = await FinanceCenterService(db).receipt_summary(start_date, end_date)
+        result = await FinanceCenterService(db).receipt_summary(
+            start_date, end_date,
+            include_bank_ledger=user_has_permission(current_user, PERM_COMPANY_ACCOUNT_LEDGER_READ),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return success(result)

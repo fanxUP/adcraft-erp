@@ -22,11 +22,11 @@ def contract_status_expression(today):
     from app.repositories.payment_repo import active_unambiguous_contract_links
     allocated = select(func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0)).join(
         Payment, Payment.id == PaymentAllocation.payment_id,
-    ).where(PaymentAllocation.contract_id == Contract.id, Payment.is_voided.is_(False)).correlate(Contract).scalar_subquery()
+    ).where(PaymentAllocation.contract_id == Contract.id, Payment.active()).correlate(Contract).scalar_subquery()
     links = active_unambiguous_contract_links()
     legacy = select(func.coalesce(func.sum(Payment.amount), 0)).join(
         links, links.c.document_id == Payment.document_id,
-    ).where(links.c.contract_id == Contract.id, Payment.is_voided.is_(False),
+    ).where(links.c.contract_id == Contract.id, Payment.active(),
         ~exists(select(PaymentAllocation.id).where(PaymentAllocation.payment_id == Payment.id)),
     ).correlate(Contract).scalar_subquery()
     total = contract_total_expression()

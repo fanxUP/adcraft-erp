@@ -239,11 +239,17 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="205" fixed="right">
                 <template #default="{ row }">
-                  <div v-if="row.entry_type === 'manual' && canCreateEntry" class="ledger-row-actions">
-                    <el-button text type="primary" :disabled="mutating" @click="openEditEntry(account, row)">编辑</el-button>
-                    <el-button text type="danger" :disabled="mutating" @click="deleteManualEntry(account, row)">删除</el-button>
+                  <div v-if="row.entry_type === 'manual'" class="ledger-row-actions">
+                    <el-button v-if="row.income_amount > 0 && row.category === MAIN_BUSINESS_INCOME && auth.can('payment:read')" text type="primary" @click="openReceivables(row.id)">
+                      {{ row.receipt_linked ? '查看应收' : '去关联' }}
+                    </el-button>
+                    <template v-if="canCreateEntry && !row.receipt_linked">
+                      <el-button text type="primary" :disabled="mutating" @click="openEditEntry(account, row)">编辑</el-button>
+                      <el-button text type="danger" :disabled="mutating" @click="deleteManualEntry(account, row)">删除</el-button>
+                    </template>
+                    <span v-else-if="row.receipt_linked && !auth.can('payment:read')">已关联</span>
                   </div>
                   <el-button v-else-if="canOpenCashSource(row)" text type="primary" @click="openCashSource(row)">查看来源</el-button>
                   <span v-else-if="!isLedgerSummaryRow(row)">—</span>
@@ -348,7 +354,7 @@
           <el-select v-model="entryPurpose" style="width: 100%" @change="resetEntryPurposeFields">
             <el-option label="手工收支" value="manual" />
             <el-option v-if="canCreateProjectCost" label="项目成本付款" value="project_cost" />
-            <el-option v-if="canCreateReceipt" label="客户收款" value="receipt" />
+            <el-option :label="MAIN_BUSINESS_INCOME" value="receipt" />
           </el-select>
         </el-form-item>
         <el-row :gutter="16">
@@ -383,7 +389,7 @@
         <el-form-item label="摘要（选填）" prop="summary">
           <el-input v-model="entryForm.summary" maxlength="255" placeholder="自行填写；不填写则留空" />
         </el-form-item>
-        <el-row v-if="entryPurpose !== 'receipt'" :gutter="16">
+        <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item label="对方户名">
               <el-autocomplete
@@ -416,7 +422,7 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :span="24">
-            <el-form-item label="关联订单" prop="order_id" :required="entryPurpose !== 'manual'" :rules="entryPurpose === 'manual' ? [] : orderRules">
+            <el-form-item label="关联订单" prop="order_id" :required="entryPurpose === 'project_cost'" :rules="entryPurpose === 'project_cost' ? orderRules : []">
               <el-select
                 v-model="entryForm.order_id"
                 filterable
@@ -465,7 +471,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   accountTypeLabels,
-  createBankCustomerReceipt,
   createBankLedgerEntry,
   createBankProjectCost,
   deleteBankLedgerEntry,
@@ -498,8 +503,9 @@ import { formatMoney } from '@/utils/format'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const INTERNAL_TRANSFER_CATEGORY = '内部账户调拨'
+const MAIN_BUSINESS_INCOME = '主营业务收入'
 const INCOME_CATEGORIES = [
-  '主营业务收入', '其他业务收入', '高空作业车', '其他收入', '利息收入',
+  MAIN_BUSINESS_INCOME, '其他业务收入', '高空作业车', '其他收入', '利息收入',
   '借款', '张江', '投标保证金', '过账', INTERNAL_TRANSFER_CATEGORY,
 ]
 const ALL_ACCOUNTS_SCOPE = '__all_accounts__'
@@ -552,7 +558,6 @@ function openCashSource(row: BankLedgerRow) {
 }
 const canCreateEntry = computed(() => auth.can('company_account:ledger_create'))
 const canCreateProjectCost = computed(() => auth.canAll(['company_account:select', 'expense:create']))
-const canCreateReceipt = computed(() => auth.canAll(['company_account:select', 'payment:create']))
 const canSetOpeningBalance = computed(() => auth.can('company_account:opening_balance_set'))
 const accounts = shallowRef<CompanyAccount[]>([])
 const allCompanyAccounts = shallowRef<CompanyAccount[]>([])
@@ -634,7 +639,7 @@ const categoryOptions = computed(() => {
 const entryPurposeHint = computed(() => ({
   manual: '适用于手续费、利息等独立流水。已在系统登记的业务收付款请勿重复补录。',
   project_cost: '按实际已付款金额登记，同时计入所选订单的项目成本。已有应付款请从应付账款登记付款。',
-  receipt: '登记后增加账户收入，并冲减所选订单及其合同的待收金额。',
+  receipt: '到账流水会进入应收管理的收款记录，关联合同后计入回款。',
 })[entryPurpose.value])
 const categoryRules = [{ required: true, whitespace: true, message: '请选择或填写成本分类', trigger: 'change' }]
 const orderRules = [{ required: true, message: '请选择关联订单', trigger: 'change' }]
@@ -738,7 +743,9 @@ async function loadAccounts() {
     accounts.value = accountOptions.filter(account =>
       ['bank', 'wechat', 'alipay', 'cash', 'other'].includes(account.account_type),
     )
-    const firstAccount = accounts.value.find(account => account.is_active) ?? accounts.value[0]
+    const firstAccount = accounts.value.find(account => account.id === route.query.account_id)
+      ?? accounts.value.find(account => account.is_default && account.is_active)
+      ?? accounts.value.find(account => account.is_active) ?? accounts.value[0]
     if (firstAccount) selectAccount(firstAccount.id)
   } catch {
     accountsError.value = true
@@ -832,6 +839,29 @@ function openEntry(account: CompanyAccount) {
   entryFormRef.value?.clearValidate()
 }
 
+const returnToReceivables = ref(false)
+function openReceivables(entryId: string) {
+  void router.push({ name: 'ReceivablesView', query: { section: 'payments', bank_entry_id: entryId } })
+}
+
+async function openGuidedReceipt() {
+  if (route.query.action !== 'register_income' || !result.value || !canCreateEntry.value) return
+  const account = accounts.value.find(item => item.id === activeAccountId.value)
+  if (!account) return
+  const { order_id: orderId, ...rest } = route.query
+  delete rest.action
+  await router.replace({ query: rest })
+  openEntry(account)
+  if (!entryDialogVisible.value) return
+  returnToReceivables.value = true
+  entryPurpose.value = 'receipt'
+  resetEntryPurposeFields()
+  if (typeof orderId === 'string' && orderId) {
+    orderOptions.value = [{ id: orderId, doc_no: '来源订单', project_name: '应收管理', department: null }]
+    entryForm.order_id = orderId
+  }
+}
+
 function openEditEntry(account: CompanyAccount, row: BankLedgerRow) {
   if (row.entry_type !== 'manual' || !canCreateEntry.value) return
   resetEntryForm()
@@ -900,6 +930,7 @@ async function deleteManualEntry(account: CompanyAccount, row: BankLedgerRow) {
 }
 
 function resetEntryForm() {
+  returnToReceivables.value = false
   entryEditingId.value = ''
   entryBalanceSnapshot.value = null
   entryPurpose.value = 'manual'
@@ -917,7 +948,8 @@ function resetEntryForm() {
 
 function resetEntryPurposeFields() {
   entryForm.request_id = newRequestId()
-  entryForm.category = ''
+  entryForm.category = entryPurpose.value === 'receipt' ? MAIN_BUSINESS_INCOME : ''
+  if (entryPurpose.value === 'receipt') entryForm.direction = 'income'
   entryForm.project_name = ''
   entryForm.department = ''
   entryForm.order_id = ''
@@ -1050,15 +1082,18 @@ async function submitEntry() {
         counterparty_name: entryForm.counterparty_name.trim() || undefined,
       })
       ElMessage.success('付款已登记，项目成本已更新')
-    } else if (entryPurpose.value === 'receipt') {
-      await createBankCustomerReceipt(accountId, payload)
-      ElMessage.success('收款已登记，应收账款已更新')
     } else {
-      await createBankLedgerEntry(accountId, {
+      const row = await createBankLedgerEntry(accountId, {
         ...manualPayload,
         request_id: entryForm.request_id,
       })
-      ElMessage.success('台账流水已登记')
+      const isMainIncome = manualPayload.direction === 'income' && manualPayload.category === MAIN_BUSINESS_INCOME
+      ElMessage.success(isMainIncome ? '收入已登记，可在应收管理关联合同' : '台账流水已登记')
+      if (isMainIncome && returnToReceivables.value && auth.can('payment:read')) {
+        entryDialogVisible.value = false
+        openReceivables(row.id)
+        return
+      }
     }
     entryDialogVisible.value = false
     page.value = 1
@@ -1071,6 +1106,7 @@ async function submitEntry() {
 }
 
 watch([activeAccountId, page, appliedFilters], loadLedger)
+watch(result, () => { void openGuidedReceipt() })
 onMounted(() => {
   void loadFinanceCategories()
   if (canReadAccounts.value) void loadAccounts()

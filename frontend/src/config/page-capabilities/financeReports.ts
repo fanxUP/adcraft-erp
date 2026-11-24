@@ -9,9 +9,9 @@ export const financeReportCapabilities: PageCapabilityMap = {
   },
   receivables: {
     title: '应收管理',
-    purpose: '查看订单应收、已收、欠款并登记客户收款',
+    purpose: '查看合同欠款，将银行台账中的主营业务收入关联到合同',
     workflowStage: 'receivables',
-    availableActions: ['查询客户欠款', '查看订单应收', '登记收款'],
+    availableActions: ['查询客户欠款', '查看订单应收', '关联合同', '去银行台账登记'],
     quickActions: [{ label: '欠款客户', prompt: '有哪些欠款客户' }],
   },
   expenses: {

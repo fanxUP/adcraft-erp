@@ -3,11 +3,13 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Numeric, String, and_, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+
+MAIN_BUSINESS_INCOME = "主营业务收入"
 
 
 class BankLedgerEntry(Base, TimestampMixin):
@@ -65,3 +67,7 @@ class BankLedgerEntry(Base, TimestampMixin):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    @classmethod
+    def main_business_income(cls):
+        return and_(cls.entry_type == "manual", cls.direction == "income", cls.category == MAIN_BUSINESS_INCOME)

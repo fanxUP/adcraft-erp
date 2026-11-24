@@ -3,7 +3,7 @@ import os
 import time
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -191,7 +191,10 @@ async def delete_contract(
     service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     before = await service.get_contract(cid)
-    ok = await service.delete_contract(cid)
+    try:
+        ok = await service.delete_contract(cid)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     if not ok:
         return {"code": 40401, "message": "合同不存在", "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

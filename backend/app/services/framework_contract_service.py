@@ -130,7 +130,7 @@ class FrameworkContractService:
             .where(
                 FrameworkContractProjectDocument.project_id.in_(project_ids),
                 PaymentAllocation.contract_id == FrameworkContractProject.contract_id,
-                Payment.is_voided.is_(False),
+                Payment.active(),
             )
         )
         allocation_exists = ~exists(
@@ -147,7 +147,7 @@ class FrameworkContractService:
             .join(Payment, Payment.document_id == FrameworkContractProjectDocument.document_id)
             .where(
                 FrameworkContractProjectDocument.project_id.in_(project_ids),
-                Payment.is_voided.is_(False),
+                Payment.active(),
                 allocation_exists,
             )
         )

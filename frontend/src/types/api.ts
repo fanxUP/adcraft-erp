@@ -929,6 +929,8 @@ export interface PaymentResponse {
   amount: number
   payment_method?: string
   payment_account_id?: string | null
+  bank_sourced?: boolean
+  archive_batch_id?: string | null
   paid_at?: string
   remark?: string
   is_voided: boolean

@@ -314,7 +314,10 @@ export interface OrderDeletePayload { reason: string; expected_updated_at: strin
 export interface OrderFinancialValues { total_amount: number; paid_amount: number; unpaid_amount: number; overpaid_amount: number; cost_amount?: number; gross_profit?: number }
 export interface OrderDeletePreview { order_id: string; order_no: string; before: OrderFinancialValues; after: OrderFinancialValues; preview_id: string; plan_hash: string; preview_expires_at: string; association_catalog: Array<{ label: string; record_no?: string; status: string; note: string }> }
 export interface OrderAction { id: string; batch_id: string; module: string; record_no?: string; detail: string; status: string; resolution?: string; can_resolve: boolean; resolve_reason?: string }
-export interface OrderFunds extends OrderFinancialValues { payments: Array<{ id: string; payment_no: string; amount: number; record_type: string; is_voided: boolean; paid_at?: string; remark?: string }> }
+export interface OrderFunds extends OrderFinancialValues {
+  use_contract_receipts: boolean
+  payments: Array<{ id: string; payment_no: string; amount: number; record_type: string; is_voided: boolean; paid_at?: string; remark?: string }>
+}
 export function previewOrderDelete(id: string, data: OrderDeletePayload) { return post<OrderDeletePreview>(`/orders/${id}/delete-preview`, data) }
 export function getOrderActions(id: string) { return get<OrderAction[]>(`/orders/${id}/change-actions`) }
 export function resolveOrderAction(id: string, actionId: string, resolution: string) { return post(`/orders/${id}/change-actions/${actionId}/resolve`, { resolution }) }

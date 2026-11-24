@@ -2,10 +2,39 @@ import type { PaymentAccountKind } from './companyAccounts'
 import { apiClient, get, post, put, del } from './index'
 import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, ExpenseDeleteConfirmedResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
 
-export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
+type ReceiptFilter = { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string }
+export function getPayments(params?: ReceiptFilter & { status?: string; archived?: boolean; exclude_bank_receipts?: boolean }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
 export function createPayment(data: Omit<Partial<PaymentResponse>, 'id' | 'payment_no' | 'created_at' | 'created_by'>) { return post<PaymentResponse>('/payments/', data) }
 export function voidPayment(id: string, data: { void_reason: string }) { return post<SuccessResponse>(`/payments/${id}/void`, data) }
+export type BankReceiptStatus = 'unlinked' | 'linked' | 'review'
+export interface BankReceipt {
+  id: string
+  account_id: string
+  account_name: string
+  account_last_four: string | null
+  entry_date: string
+  counterparty_name: string | null
+  summary: string | null
+  amount: number | string
+  order_id: string | null
+  order_no: string | null
+  payment_id: string | null
+  payment_no: string | null
+  contract_id: string | null
+  contract_no: string | null
+  customer_name: string | null
+  status: BankReceiptStatus
+}
+export function getBankReceipts(params: ReceiptFilter & {
+  account_id?: string; status?: BankReceiptStatus; start_date?: string; end_date?: string; keyword?: string; entry_id?: string
+}) { return get<PaginatedData<BankReceipt>>('/payments/bank-receipts', { params }) }
+export function linkBankReceipt(entryId: string, data: {
+  contract_id: string; order_id?: string; expected_amount: string | number; expected_date: string
+}) { return post<PaymentResponse>(`/payments/bank-receipts/${entryId}/link`, data) }
+export function unlinkBankReceipt(entryId: string, data: { payment_id: string; reason: string }) {
+  return post<PaymentResponse>(`/payments/bank-receipts/${entryId}/unlink`, data)
+}
 export function uploadReceipt(paymentId: string, file: File) {
   const form = new FormData()
   form.append('file', file)
@@ -91,7 +120,7 @@ export function getExpenditure(view: ExpenditureView, params: {
 export interface FinanceCashflowSummary {
   period: { count: number; amount: number }
   undated: { count: number; amount: number }
-  source: 'payments'
+  source: 'payments' | 'payments_and_bank_ledger'
   date_basis: 'paid_at'
 }
 

@@ -1,7 +1,7 @@
 from app.schemas.common import ActionCapability, CoercedModel, StatusView
 from pydantic import BaseModel, Field, field_validator, model_validator
 from app.domain.payment_dates import require_payment_date
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from decimal import Decimal
 
@@ -54,6 +54,8 @@ class PaymentResponse(CoercedModel):
     amount: float
     record_type: str = "receipt"
     reference_payment_id: str | None = None
+    bank_sourced: bool = False
+    archive_batch_id: str | None = None
     payment_method: str | None = None
     paid_at: str | None = None
     remark: str | None = None
@@ -81,6 +83,18 @@ class PaymentVoid(BaseModel):
         if not value:
             raise ValueError("作废原因不能为空")
         return value
+
+
+class BankReceiptLink(BaseModel):
+    contract_id: UUID
+    order_id: UUID | None = None
+    expected_amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    expected_date: date
+
+
+class BankReceiptUnlink(BaseModel):
+    payment_id: UUID
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class StatementCreate(BaseModel):

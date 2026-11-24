@@ -11,7 +11,15 @@
       </el-table>
     </el-card>
     <el-card v-if="auth.can('payment:read')" shadow="never">
-      <template #header><div class="panel-header"><span>收款、退款与预收分配</span><el-button v-if="auth.can('payment:create')" type="primary" @click="openFunds">登记资金处理</el-button></div></template>
+      <template #header>
+        <div class="panel-header">
+          <span>收款、退款与预收分配</span>
+          <div v-if="funds && auth.can('payment:create')">
+            <el-button v-if="funds.use_contract_receipts && canAssociate" type="primary" @click="openReceivables">关联收款</el-button>
+            <el-button v-if="!funds.use_contract_receipts || sourcePayments.length" @click="openFunds">登记资金处理</el-button>
+          </div>
+        </div>
+      </template>
       <el-alert v-if="funds && funds.overpaid_amount > 0" type="warning" :closable="false" :title="`超收/待退 ¥${funds.overpaid_amount.toFixed(2)}，请按实际退款或转预收处理`" style="margin-bottom: 12px" />
       <el-table :data="funds?.payments || []" border empty-text="暂无收付款记录">
         <el-table-column prop="payment_no" label="流水编号" min-width="180" />
@@ -24,7 +32,7 @@
     </el-card>
     <el-dialog v-model="dialog" title="登记收款、退款或预收分配" width="min(560px, 94vw)" :close-on-click-modal="false">
       <el-form label-width="120px">
-        <el-form-item label="处理方式" required><el-select v-model="form.operation"><el-option label="登记收款" value="receipt" /><el-option label="实际退款" value="refund" /><el-option label="超收转合同预收" value="release_credit" /><el-option label="合同预收分配至本单" value="apply_credit" /></el-select></el-form-item>
+        <el-form-item label="处理方式" required><el-select v-model="form.operation"><el-option v-if="!funds?.use_contract_receipts" label="登记收款" value="receipt" /><el-option label="实际退款" value="refund" /><el-option label="超收转合同预收" value="release_credit" /><el-option label="合同预收分配至本单" value="apply_credit" /></el-select></el-form-item>
         <el-form-item v-if="form.operation !== 'receipt'" label="原收款凭据" required><el-select v-model="form.payment_id" style="width: 100%"><el-option v-for="payment in sourcePayments" :key="payment.id" :value="payment.id" :label="`${payment.payment_no}　¥${payment.amount}`" /></el-select></el-form-item>
         <el-form-item label="金额" required><el-input-number v-model="form.amount" :min="0.01" :precision="2" /></el-form-item>
         <el-form-item :label="form.operation === 'refund' ? '实际退款日期' : form.operation === 'receipt' ? '实际收款日期' : '处理日期'" required><el-date-picker v-model="form.paid_at" value-format="YYYY-MM-DD" :clearable="false" /></el-form-item>
@@ -37,6 +45,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { getOrderActions, getOrderFunds, resolveOrderAction, mutateOrderFunds, type OrderAction, type OrderFunds } from '@/api/orders'
@@ -44,6 +53,8 @@ import { newRequestId } from '@/utils/requestId'
 const props = defineProps<{ orderId: string }>()
 const emit = defineEmits<{ updated: [] }>()
 const auth = useAuthStore(), actions = ref<OrderAction[]>([]), funds = ref<OrderFunds | null>(null)
+const router = useRouter()
+const canAssociate = computed(() => auth.canAll(['company_account:ledger_read', 'report:view_financial']))
 const dialog = ref(false), saving = ref(false)
 let requestId = newRequestId()
 const form = reactive({ payment_id: '', operation: 'refund' as 'receipt' | 'refund' | 'release_credit' | 'apply_credit', amount: 0.01, paid_at: '', reason: '' })
@@ -62,9 +73,13 @@ async function resolve(id: string) {
     await resolveOrderAction(props.orderId, id, result.value); await load()
   } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : '处理失败') }
 }
+function openReceivables() {
+  void router.push({ name: 'ReceivablesView', query: { section: 'payments', associate_order_id: props.orderId } })
+}
 function openFunds() {
   requestId = newRequestId(); form.paid_at = new Date().toLocaleDateString('sv-SE')
-  form.operation = funds.value?.overpaid_amount ? 'refund' : 'receipt'; form.payment_id = sourcePayments.value[0]?.id || ''; form.amount = funds.value?.overpaid_amount || funds.value?.unpaid_amount || 0.01; form.reason = ''; dialog.value = true
+  form.operation = funds.value?.overpaid_amount ? 'refund' : funds.value?.use_contract_receipts ? 'apply_credit' : 'receipt'
+  form.payment_id = sourcePayments.value[0]?.id || ''; form.amount = funds.value?.overpaid_amount || funds.value?.unpaid_amount || 0.01; form.reason = ''; dialog.value = true
 }
 async function saveFunds() {
   if ((form.operation !== 'receipt' && !form.payment_id) || !form.paid_at || !form.reason.trim()) { ElMessage.warning('请完整填写带 * 的必填项'); return }

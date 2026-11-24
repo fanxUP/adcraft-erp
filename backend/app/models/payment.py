@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, Numeric, String, Text, ForeignKey, and_, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,6 +11,16 @@ from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 class Payment(Base, TimestampMixin):
     __tablename__ = "payments"
+    __table_args__ = (
+        Index(
+            "uq_payments_active_bank_ledger_entry",
+            "bank_ledger_entry_id",
+            unique=True,
+            postgresql_where=text(
+                "bank_ledger_entry_id IS NOT NULL AND is_voided IS FALSE AND archive_batch_id IS NULL"
+            ),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     payment_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -28,6 +38,13 @@ class Payment(Base, TimestampMixin):
     payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("company_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    bank_ledger_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bank_ledger_entries.id", ondelete="SET NULL", name="fk_payments_bank_ledger_entry"),
+        nullable=True,
+        index=True,
+    )
+    archive_batch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -43,6 +60,10 @@ class Payment(Base, TimestampMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    @classmethod
+    def active(cls):
+        return and_(cls.is_voided.is_(False), cls.archive_batch_id.is_(None))
 
 
 class PaymentAllocation(Base, TimestampMixin):

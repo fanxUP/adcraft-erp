@@ -313,7 +313,8 @@ class BankLedgerService:
             .where(
                 Payment.payment_account_id.in_(account_ids),
                 Payment.record_type == "receipt",
-                Payment.is_voided.is_(False),
+                Payment.bank_ledger_entry_id.is_(None),
+                Payment.active(),
                 Payment.paid_at.is_not(None),
             )
         )
@@ -324,7 +325,10 @@ class BankLedgerService:
                     Payment.paid_at >= datetime.combine(opening_date, datetime.min.time()),
                 )
         receipts = (await self.db.execute(receipts_query)).mappings().all()
-        manual_query = select(BankLedgerEntry).where(
+        has_receipt = exists(select(Payment.id).where(
+            Payment.bank_ledger_entry_id == BankLedgerEntry.id, Payment.active(),
+        ))
+        manual_query = select(BankLedgerEntry, has_receipt.label("receipt_linked")).where(
             BankLedgerEntry.account_id.in_(account_ids),
             BankLedgerEntry.entry_type == "manual",
         ).options(selectinload(BankLedgerEntry.category_record))
@@ -334,7 +338,7 @@ class BankLedgerService:
                 manual_query = manual_query.where(BankLedgerEntry.entry_date >= opening_date)
         manual_entries = (await self.db.execute(
             manual_query.order_by(BankLedgerEntry.account_id, BankLedgerEntry.entry_date, BankLedgerEntry.created_at)
-        )).scalars().all()
+        )).all()
 
         can_read_receipts = user_has_permission(self.viewer, "payment:read")
         for receipt in receipts:
@@ -387,7 +391,7 @@ class BankLedgerService:
                 "_sort": (row_date, 1, paid_at.isoformat(), str(payment["row_key"])),
             })
 
-        for entry in manual_entries:
+        for entry, receipt_linked in manual_entries:
             opening_date = opening_dates.get(entry.account_id)
             if opening_date and entry.entry_date < opening_date:
                 continue
@@ -395,6 +399,7 @@ class BankLedgerService:
             is_income = entry.direction == "income"
             rows_by_account[entry.account_id].append({
                 "id": str(entry.id), "entry_type": "manual", "source_label": "手工登记",
+                "receipt_linked": receipt_linked,
                 "entry_date": entry.entry_date.isoformat(), "summary": entry.summary,
                 "remark": None, "counterparty_account": entry.counterparty_account,
                 "counterparty_name": entry.counterparty_name,
@@ -642,6 +647,14 @@ class BankLedgerService:
         ).with_for_update())
         if entry is None:
             raise ValueError("手工台账流水不存在或不可编辑")
+        if (
+            entry.entry_date != data["entry_date"]
+            or entry.direction != data["direction"]
+            or entry.amount != self._money(data["amount"])
+            or entry.category != (str(data.get("category") or "").strip() or None)
+            or entry.order_id != data.get("order_id")
+        ):
+            await self._ensure_receipt_unlinked(entry.id)
 
         opening = await self.db.scalar(select(BankLedgerEntry).where(
             BankLedgerEntry.account_id == account_id,
@@ -729,10 +742,17 @@ class BankLedgerService:
         ).with_for_update())
         if entry is None:
             raise ValueError("手工台账流水不存在或不可删除")
+        await self._ensure_receipt_unlinked(entry.id)
         before = self.audit_snapshot(entry)
         await self.db.delete(entry)
         await self.db.flush()
         return before
+
+    async def _ensure_receipt_unlinked(self, entry_id: UUID):
+        if await self.db.scalar(select(Payment.id).where(
+            Payment.bank_ledger_entry_id == entry_id, Payment.active(),
+        )):
+            raise ValueError("流水已关联合同，请先在应收管理解除关联")
 
     async def _lock_business_request(self, request_id: UUID):
         await self.db.execute(

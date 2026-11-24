@@ -536,7 +536,7 @@
       "route_name": "ReceivablesView",
       "path": "/receivables",
       "title": "应收管理",
-      "purpose": "查看订单应收、已收、欠款并登记客户收款",
+      "purpose": "查看合同欠款，将银行台账中的主营业务收入关联到合同",
       "workflow_stage": "receivables",
       "business_types": [
         "order"
@@ -777,11 +777,11 @@
       }
     },
     "receivable-register-payment": {
-      "purpose": "登记客户实际到账的收款记录",
+      "purpose": "从银行台账登记实际到账，再回到收款记录关联合同",
       "prerequisites": [
         "已核对付款方、到账金额、时间和收款凭证"
       ],
-      "completion_signal": "应收记录的已收金额增加且欠款同步减少",
+      "completion_signal": "流水已关联合同，合同已收金额增加且待收同步减少",
       "blocking_conditions": [
         "到账信息未核实、订单不存在或权限不足"
       ],

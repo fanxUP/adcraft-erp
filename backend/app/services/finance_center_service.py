@@ -1,9 +1,10 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, case, func, literal, or_, select
+from sqlalchemy import and_, case, exists, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.bank_ledger import BankLedgerEntry
 from app.models.business_document import BusinessDocument
 from app.models.outsource import OutsourceTask, OutsourceVendor
 from app.models.payment import Payment
@@ -17,7 +18,7 @@ class FinanceCenterService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def receipt_summary(self, start_date: date, end_date: date) -> dict:
+    async def receipt_summary(self, start_date: date, end_date: date, *, include_bank_ledger: bool = False) -> dict:
         if start_date > end_date or end_date == date.max:
             raise ValueError("收款统计日期范围无效")
 
@@ -25,25 +26,47 @@ class FinanceCenterService:
         end_at = datetime.combine(end_date + timedelta(days=1), time.min)
         in_period = Payment.paid_at.is_not(None) & (Payment.paid_at >= start_at) & (Payment.paid_at < end_at)
         undated = Payment.paid_at.is_(None)
+        payment_filter = [Payment.active()]
+        if include_bank_ledger:
+            payment_filter.append(Payment.bank_ledger_entry_id.is_(None))
         row = (await self.db.execute(
             select(
                 func.count(Payment.id).filter(in_period).label("period_count"),
                 func.coalesce(func.sum(Payment.amount).filter(in_period), 0).label("period_amount"),
                 func.count(Payment.id).filter(undated).label("undated_count"),
                 func.coalesce(func.sum(Payment.amount).filter(undated), 0).label("undated_amount"),
-            ).where(Payment.is_voided.is_(False))
+            ).where(*payment_filter)
         )).one()
 
+        bank_count, bank_amount = 0, Decimal("0")
+        if include_bank_ledger:
+            is_archived_cash = exists(select(Payment.id).where(
+                Payment.bank_ledger_entry_id == BankLedgerEntry.id,
+                Payment.archive_batch_id.is_not(None), Payment.is_voided.is_(False),
+            ))
+            bank_count, bank_amount = (await self.db.execute(
+                select(
+                    func.count(BankLedgerEntry.id),
+                    func.coalesce(func.sum(case(
+                        (BankLedgerEntry.direction == "expense", -BankLedgerEntry.amount),
+                        else_=BankLedgerEntry.amount,
+                    )), 0),
+                ).where(
+                    BankLedgerEntry.entry_type == "manual",
+                    BankLedgerEntry.entry_date.between(start_date, end_date),
+                    or_(BankLedgerEntry.main_business_income(), is_archived_cash),
+                )
+            )).one()
         return {
             "period": {
-                "count": int(row.period_count or 0),
-                "amount": float(row.period_amount or Decimal("0")),
+                "count": int(row.period_count or 0) + bank_count,
+                "amount": float(Decimal(str(row.period_amount or 0)) + bank_amount),
             },
             "undated": {
                 "count": int(row.undated_count or 0),
                 "amount": float(row.undated_amount or Decimal("0")),
             },
-            "source": "payments",
+            "source": "payments_and_bank_ledger" if include_bank_ledger else "payments",
             "date_basis": "paid_at",
         }
 

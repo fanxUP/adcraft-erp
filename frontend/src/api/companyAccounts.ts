@@ -25,6 +25,7 @@ export interface BankLedgerRow {
   id: string
   entry_type: 'opening_balance' | 'source_payment' | 'source_receipt' | 'manual' | 'monthly_total' | 'yearly_total'
   source_label: string
+  receipt_linked?: boolean
   source_kind?: string
   source_id?: string | null
   document_id?: string | null
